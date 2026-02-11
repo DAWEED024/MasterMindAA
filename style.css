@@ -20,7 +20,7 @@ html,
 body {
   height: 100%;
   margin: 0;
-  overflow: hidden !important;
+  overflow: hidden;
   overscroll-behavior: none;
 }
 
@@ -29,18 +29,17 @@ body {
 }
 
 body {
-  min-height: 100svh;
+  min-height: 100dvh;
   font-family: "Press Start 2P", monospace;
   font-size: var(--font-base);
   color: var(--text);
-  overflow: hidden;
   background:
     repeating-linear-gradient(45deg, rgba(70, 62, 53, 0.03), rgba(70, 62, 53, 0.03) 3px, transparent 3px, transparent 9px),
     radial-gradient(circle at top, #e5dfd1, #d4cebf 62%, #c9c2b1);
 }
 
 .app-shell {
-  min-height: 100svh;
+  height: 100dvh;
   display: grid;
   place-items: center;
   padding: var(--pad);
@@ -48,9 +47,11 @@ body {
 
 .board {
   touch-action: manipulation;
-  width: min(1100px, 100%);
-  max-height: 100svh;
-  overflow: auto;
+  width: min(92vw, 1100px);
+  height: min(100dvh, 920px);
+  overflow: hidden;
+  display: grid;
+  grid-template-rows: auto 1fr auto;
   background: var(--board);
   border-radius: 20px;
   padding: var(--pad);
@@ -107,6 +108,14 @@ h2 {
   padding: calc(var(--pad) * 0.8);
   box-shadow: inset 1px 1px 2px rgba(255, 255, 255, 0.18), inset -2px -2px 4px rgba(94, 84, 72, 0.35);
   margin-bottom: var(--gap);
+  grid-row: 2;
+  min-height: 0;
+}
+
+.game-screen {
+  display: grid;
+  grid-template-rows: auto 1fr auto;
+  overflow: hidden;
 }
 
 .hidden {
@@ -217,6 +226,10 @@ button:disabled {
   display: grid;
   gap: calc(var(--gap) * 0.7);
   margin-bottom: var(--gap);
+  min-height: 0;
+  overflow: auto;
+  -webkit-overflow-scrolling: touch;
+  padding-right: 2px;
 }
 
 .row {
@@ -357,6 +370,7 @@ button:disabled {
 }
 
 .stats {
+  grid-row: 3;
   margin-top: calc(var(--gap) * 0.5);
   border-radius: 10px;
   background: #b9b1a2;
@@ -459,7 +473,7 @@ button:disabled {
 
 @media (min-width: 521px) and (max-width: 899px) {
   .board {
-    width: min(1000px, 100%);
+    width: min(92vw, 1000px);
   }
 }
 
