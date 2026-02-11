@@ -20,6 +20,8 @@ html,
 body {
   height: 100%;
   margin: 0;
+  overflow: hidden !important;
+  overscroll-behavior: none;
 }
 
 * {
@@ -45,6 +47,7 @@ body {
 }
 
 .board {
+  touch-action: manipulation;
   width: min(1100px, 100%);
   max-height: 100svh;
   overflow: auto;
@@ -108,6 +111,19 @@ h2 {
 
 .hidden {
   display: none !important;
+}
+
+.board,
+.board * {
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+button,
+.slot,
+.palette-color {
+  -webkit-tap-highlight-color: transparent;
 }
 
 .back-btn {
@@ -309,6 +325,7 @@ button:disabled {
 }
 
 .controls {
+  touch-action: manipulation;
   border-radius: 12px;
   padding: calc(var(--pad) * 0.6);
   background: #b6ae9f;
