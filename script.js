@@ -30,6 +30,7 @@ const COLORS = [
 const COLOR_INDEX_BY_KEY = Object.fromEntries(COLORS.map((color, index) => [color.key, index]));
 const STORAGE_KEY = "aaMasterMindStatsByMode";
 const STATS_UI_KEY = "aaMasterMindStatsExpanded";
+const SFX_KEY = "aaMasterMindSfxEnabled";
 
 const TIMER_KEYS = {
   runStartMs: "runStartMs",
@@ -44,6 +45,7 @@ const el = {
   subtitle: document.getElementById("subtitle"),
   timerReadout: document.getElementById("timer-readout"),
   startScreen: document.getElementById("start-screen"),
+  howToScreen: document.getElementById("howto-screen"),
   twoPlayerSet: document.getElementById("two-player-set-screen"),
   twoPlayerPass: document.getElementById("two-player-pass-screen"),
   matchChoice: document.getElementById("match-choice-screen"),
@@ -63,6 +65,7 @@ const el = {
   soloModeBtn: document.getElementById("solo-mode-btn"),
   twoPlayerModeBtn: document.getElementById("two-player-mode-btn"),
   matchModeBtn: document.getElementById("match-mode-btn"),
+  howToBtn: document.getElementById("how-to-btn"),
   startGuessingBtn: document.getElementById("start-guessing-btn"),
   createMatchBtn: document.getElementById("create-match-btn"),
   joinMatchBtn: document.getElementById("join-match-btn"),
@@ -73,6 +76,7 @@ const el = {
   startJoinedMatchBtn: document.getElementById("start-joined-match-btn"),
   joinInput: document.getElementById("join-match-input"),
   joinError: document.getElementById("join-error"),
+  sfxToggle: document.getElementById("sfx-toggle"),
   statsToggle: document.getElementById("stats-toggle"),
   statsBody: document.getElementById("stats-body"),
   statsMode: document.getElementById("stats-mode"),
@@ -84,7 +88,9 @@ const el = {
   resultTitle: document.getElementById("result-title"),
   resultMessage: document.getElementById("result-message"),
   resultTime: document.getElementById("result-time"),
+  resultMatchCode: document.getElementById("result-match-code"),
   revealedCode: document.getElementById("revealed-code"),
+  copyResultCodeBtn: document.getElementById("copy-result-code-btn"),
   newGameBtn: document.getElementById("new-game-btn"),
   newMatchCodeBtn: document.getElementById("new-match-code-btn"),
   backButtons: document.querySelectorAll("[data-back-home]")
@@ -103,7 +109,10 @@ let state = {
   statsByMode: loadStats(),
   statsExpanded: localStorage.getItem(STATS_UI_KEY) === "true",
   timer: loadTimerState(),
-  timerFrame: null
+  timerFrame: null,
+  sfxEnabled: localStorage.getItem(SFX_KEY) !== "false",
+  audioCtx: null,
+  audioUnlocked: false
 };
 
 function getColorIndex(colorKey) {
@@ -290,6 +299,95 @@ function confirmAbandonIfNeeded() {
   return true;
 }
 
+/* ---------- SFX + Haptic ---------- */
+
+function updateSfxToggleLabel() {
+  if (el.sfxToggle) {
+    el.sfxToggle.textContent = `SFX: ${state.sfxEnabled ? "ON" : "OFF"}`;
+  }
+}
+
+function setSfxEnabled(enabled) {
+  state.sfxEnabled = Boolean(enabled);
+  localStorage.setItem(SFX_KEY, String(state.sfxEnabled));
+  updateSfxToggleLabel();
+}
+
+function getAudioContext() {
+  const AudioCtx = window.AudioContext || window.webkitAudioContext;
+  if (!AudioCtx) return null;
+  if (!state.audioCtx) {
+    state.audioCtx = new AudioCtx();
+  }
+  return state.audioCtx;
+}
+
+function unlockAudio() {
+  const ctx = getAudioContext();
+  if (!ctx) return;
+
+  const finalizeUnlock = () => {
+    state.audioUnlocked = true;
+    ["touchstart", "mousedown", "keydown"].forEach((evt) =>
+      document.removeEventListener(evt, unlockAudio)
+    );
+  };
+
+  if (ctx.state === "running") {
+    finalizeUnlock();
+    return;
+  }
+
+  ctx.resume().then(finalizeUnlock).catch(() => {
+    // will retry on next user gesture
+  });
+}
+
+function vibrate(pattern) {
+  if (navigator.vibrate) {
+    try {
+      navigator.vibrate(pattern);
+    } catch {
+      // no-op for unsupported environments
+    }
+  }
+}
+
+function playTone(freq, duration, type = "sine", gainValue = 0.05, when = 0) {
+  if (!state.sfxEnabled || !state.audioUnlocked) return;
+  const ctx = getAudioContext();
+  if (!ctx || ctx.state !== "running") return;
+
+  const osc = ctx.createOscillator();
+  const gain = ctx.createGain();
+  osc.type = type;
+  osc.frequency.value = freq;
+  gain.gain.value = gainValue;
+
+  osc.connect(gain);
+  gain.connect(ctx.destination);
+
+  const startAt = ctx.currentTime + when;
+  osc.start(startAt);
+  gain.gain.setValueAtTime(gainValue, startAt);
+  gain.gain.exponentialRampToValueAtTime(0.0001, startAt + duration);
+  osc.stop(startAt + duration);
+}
+
+function playSfx(type) {
+  if (type === "place") {
+    playTone(820, 0.04, "square", 0.035, 0);
+  } else if (type === "submit") {
+    playTone(640, 0.06, "triangle", 0.04, 0);
+  } else if (type === "win") {
+    playTone(523, 0.08, "triangle", 0.05, 0.00);
+    playTone(659, 0.08, "triangle", 0.05, 0.09);
+    playTone(784, 0.1, "triangle", 0.055, 0.18);
+  } else if (type === "lose") {
+    playTone(180, 0.18, "sawtooth", 0.05, 0);
+  }
+}
+
 /* ---------- MATCH CODE HELPERS ---------- */
 
 function normalizeMatchCode(code) {
@@ -347,6 +445,7 @@ function codeFromMatchCode(code) {
 function hideAllScreens() {
   [
     el.startScreen,
+    el.howToScreen,
     el.twoPlayerSet,
     el.twoPlayerPass,
     el.matchChoice,
@@ -416,6 +515,14 @@ function showMatchChoice() {
   el.matchChoice.classList.remove("hidden");
   el.subtitle.textContent = "Match Code: one-time codes for each match.";
   renderStatsPanel();
+  setStatsExpanded(false);
+}
+
+function showHowTo() {
+  if (!confirmAbandonIfNeeded()) return;
+  hideAllScreens();
+  el.howToScreen.classList.remove("hidden");
+  el.subtitle.textContent = "How to play AA Master Mind.";
   setStatsExpanded(false);
 }
 
@@ -585,6 +692,8 @@ function addColorToCurrentRow(colorKey) {
   }
 
   guess.push(colorKey);
+  playSfx("place");
+  vibrate(10);
   renderBoardState();
 
   const rowEl = el.rows.querySelectorAll(".row")[state.currentRow];
@@ -653,6 +762,9 @@ function submitGuess() {
   if (state.gameOver) return;
   const guess = state.guesses[state.currentRow];
   if (guess.length !== CODE_LENGTH) return;
+
+  playSfx("submit");
+  vibrate(15);
 
   const { blacks, whites } = evaluateGuess(guess, state.secretCode);
   state.feedback[state.currentRow] = [
@@ -749,12 +861,25 @@ function finishGame(won) {
 
   if (won) {
     el.resultMessage.textContent = `${state.winnerText || "Code cracked"} in ${attempts} attempt${attempts > 1 ? "s" : ""}.`;
+    playSfx("win");
+    vibrate([20, 30, 20]);
   } else {
     el.resultMessage.textContent = `${state.winnerText || "No guesses left"}. Attempts used: ${attempts}.`;
+    playSfx("lose");
+    vibrate([40]);
   }
 
   const bestTime = state.statsByMode[state.mode]?.bestTimeMs;
   el.resultTime.textContent = `Final Time: ${formatTime(finalTimeMs)}${bestTime ? ` | Best Time: ${formatTime(bestTime)}` : ""}`;
+
+  if (state.mode === MODES.MATCH_CODE && state.matchCode) {
+    el.resultMatchCode.textContent = `Match Code: ${state.matchCode}`;
+    el.resultMatchCode.classList.remove("hidden");
+    el.copyResultCodeBtn.classList.remove("hidden");
+  } else {
+    el.resultMatchCode.classList.add("hidden");
+    el.copyResultCodeBtn.classList.add("hidden");
+  }
 
   updateStats(state.mode, won, attempts, finalTimeMs);
   renderStatsPanel();
@@ -770,11 +895,17 @@ function finishGame(won) {
 el.soloModeBtn.addEventListener("click", beginSoloMode);
 el.twoPlayerModeBtn.addEventListener("click", beginTwoPlayerSetup);
 el.matchModeBtn.addEventListener("click", showMatchChoice);
+el.howToBtn.addEventListener("click", showHowTo);
 el.createMatchBtn.addEventListener("click", showMatchCreate);
 el.joinMatchBtn.addEventListener("click", showMatchJoin);
 
 el.statsToggle.addEventListener("click", () => {
   setStatsExpanded(!state.statsExpanded, true);
+});
+
+el.sfxToggle.addEventListener("click", () => {
+  unlockAudio();
+  setSfxEnabled(!state.sfxEnabled);
 });
 
 el.backButtons.forEach((button) => {
@@ -863,6 +994,20 @@ el.newMatchCodeBtn.addEventListener("click", () => {
   showMatchCreate();
 });
 
+el.copyResultCodeBtn.addEventListener("click", async () => {
+  if (!state.matchCode) return;
+  try {
+    await navigator.clipboard.writeText(state.matchCode);
+    el.copyResultCodeBtn.textContent = "Copied!";
+    setTimeout(() => {
+      el.copyResultCodeBtn.textContent = "Copy Code";
+    }, 900);
+    el.subtitle.textContent = "Match code copied from results.";
+  } catch {
+    el.subtitle.textContent = "Copy unavailable on this browser.";
+  }
+});
+
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
@@ -881,6 +1026,10 @@ function init() {
   el.subtitle.textContent = "Select a mode to begin.";
   renderStatsPanel();
   setStatsExpanded(false);
+  updateSfxToggleLabel();
+  ["touchstart", "mousedown", "keydown"].forEach((evt) =>
+    document.addEventListener(evt, unlockAudio, { passive: true })
+  );
   registerServiceWorker();
 }
 
