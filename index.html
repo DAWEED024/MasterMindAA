@@ -4,6 +4,9 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>AA Master Mind</title>
+    <meta name="theme-color" content="#c8c1b2" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="apple-touch-icon" href="icons/icon-192.svg" />
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link
@@ -19,9 +22,9 @@
           <p class="molded-label" aria-hidden="true">AA Master Mind</p>
           <h1>Mastermind</h1>
           <p class="subtitle" id="subtitle">Select a mode to begin.</p>
+          <p class="timer-readout" id="timer-readout">TIME 00:00.0</p>
         </header>
 
-        <!-- START + MODE FLOW SCREENS -->
         <section class="flow-screen" id="start-screen">
           <h2>Choose Mode</h2>
           <div class="action-stack">
@@ -32,6 +35,7 @@
         </section>
 
         <section class="flow-screen hidden" id="two-player-set-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
           <h2>Player 1: Set the secret code</h2>
           <p class="hint">Pick 4 colors. Duplicates are allowed.</p>
           <div class="setup-row" id="setup-row" aria-label="Secret setup row"></div>
@@ -43,6 +47,7 @@
         </section>
 
         <section class="flow-screen hidden" id="two-player-pass-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
           <h2>Pass device to Player 2</h2>
           <p class="hint">The code is hidden. Player 2 can now start guessing.</p>
           <div class="action-stack">
@@ -51,6 +56,7 @@
         </section>
 
         <section class="flow-screen hidden" id="match-choice-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
           <h2>Match Code</h2>
           <p class="hint">Use one-time match codes for fair offline play.</p>
           <div class="action-stack">
@@ -60,28 +66,31 @@
         </section>
 
         <section class="flow-screen hidden" id="match-create-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
           <h2>One-time Match Code</h2>
-          <p class="hint">Send this code to the other player.</p>
+          <p class="hint">Send this code to the other player. Use a fresh code each match.</p>
           <p class="match-code" id="generated-match-code">AA-0000-00</p>
-          <div class="action-stack horizontal">
+          <div class="action-stack horizontal tri">
             <button id="copy-match-code-btn" type="button">Copy</button>
+            <button id="share-match-code-btn" type="button">Share</button>
             <button id="start-created-match-btn" type="button">Start Match</button>
           </div>
         </section>
 
         <section class="flow-screen hidden" id="match-join-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
           <h2>Join Match</h2>
-          <p class="hint">Paste/type code (letters, digits, hyphens).</p>
+          <p class="hint">Type or paste code; it will auto-format.</p>
           <label class="sr-only" for="join-match-input">Match code</label>
-          <input id="join-match-input" class="match-input" placeholder="AA-7K2P-91" maxlength="20" />
+          <input id="join-match-input" class="match-input" placeholder="KJ-W6TE-FR" maxlength="11" />
           <p class="error-message" id="join-error"></p>
           <div class="action-stack horizontal">
             <button id="start-joined-match-btn" type="button">Start Match</button>
           </div>
         </section>
 
-        <!-- MAIN BOARD -->
         <section class="game-screen hidden" id="game-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
           <div class="secret-panel" id="secret-panel" aria-label="Secret code panel"></div>
           <section class="rows" id="rows" aria-label="Guess rows"></section>
           <section class="controls" aria-label="Game controls">
@@ -95,11 +104,14 @@
         </section>
 
         <section class="stats" aria-live="polite">
-          <h2>Stats</h2>
-          <p id="stats-mode">Mode: --</p>
-          <p id="stats-played">Played: 0</p>
-          <p id="stats-wins">Wins: 0</p>
-          <p id="stats-best">Best: --</p>
+          <button class="stats-toggle" id="stats-toggle" type="button">Stats ▾</button>
+          <div class="stats-body hidden" id="stats-body">
+            <p id="stats-mode">Mode: --</p>
+            <p id="stats-played">Played: 0</p>
+            <p id="stats-wins">Wins: 0</p>
+            <p id="stats-best">Best Score: --</p>
+            <p id="stats-best-time">Best Time: --</p>
+          </div>
         </section>
       </section>
     </main>
@@ -114,6 +126,7 @@
       <div class="result-card">
         <h2 id="result-title">Game Over</h2>
         <p id="result-message"></p>
+        <p id="result-time"></p>
         <div class="revealed-code" id="revealed-code" aria-label="Revealed secret code"></div>
         <div class="action-stack horizontal">
           <button id="new-game-btn" type="button">New Game</button>

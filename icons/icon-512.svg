@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="512" height="512" viewBox="0 0 512 512">
+  <rect width="512" height="512" rx="96" fill="#c8c1b2"/>
+  <rect x="42" y="42" width="428" height="428" rx="70" fill="#b7ad98"/>
+  <text x="256" y="252" text-anchor="middle" font-family="monospace" font-size="120" fill="#4f493f">AA</text>
+  <text x="256" y="324" text-anchor="middle" font-family="monospace" font-size="34" fill="#5a5348">MASTERMIND</text>
+</svg>
