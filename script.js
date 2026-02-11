@@ -1,8 +1,8 @@
 /*
   AA Master Mind
-  - Mode flow: SOLO, TWO PLAYERS, MATCH CODE
-  - Hash + PRNG: FNV-1a (32-bit) + mulberry32 for deterministic Match Code secrets
-  - Feedback logic: black/white peg calculation supports duplicates correctly
+  - Modes: SOLO, TWO PLAYERS, MATCH CODE
+  - Deterministic match generation: FNV-1a + mulberry32
+  - Feedback calculation supports duplicates correctly
 */
 
 const TOTAL_ROWS = 6;
@@ -24,12 +24,21 @@ const COLORS = [
 ];
 
 const COLOR_INDEX_BY_KEY = Object.fromEntries(COLORS.map((color, index) => [color.key, index]));
-
 const STORAGE_KEY = "aaMasterMindStatsByMode";
-const EMPTY_STATS = { played: 0, wins: 0, bestScore: null };
+const STATS_UI_KEY = "aaMasterMindStatsExpanded";
+
+const TIMER_KEYS = {
+  runStartMs: "runStartMs",
+  elapsedMs: "elapsedMs",
+  isRunning: "isRunning",
+  currentMode: "currentMode"
+};
+
+const EMPTY_STATS = { played: 0, wins: 0, bestScore: null, bestTimeMs: null };
 
 const el = {
   subtitle: document.getElementById("subtitle"),
+  timerReadout: document.getElementById("timer-readout"),
   startScreen: document.getElementById("start-screen"),
   twoPlayerSet: document.getElementById("two-player-set-screen"),
   twoPlayerPass: document.getElementById("two-player-pass-screen"),
@@ -55,20 +64,26 @@ const el = {
   joinMatchBtn: document.getElementById("join-match-btn"),
   generatedMatchCode: document.getElementById("generated-match-code"),
   copyMatchCodeBtn: document.getElementById("copy-match-code-btn"),
+  shareMatchCodeBtn: document.getElementById("share-match-code-btn"),
   startCreatedMatchBtn: document.getElementById("start-created-match-btn"),
   startJoinedMatchBtn: document.getElementById("start-joined-match-btn"),
   joinInput: document.getElementById("join-match-input"),
   joinError: document.getElementById("join-error"),
+  statsToggle: document.getElementById("stats-toggle"),
+  statsBody: document.getElementById("stats-body"),
   statsMode: document.getElementById("stats-mode"),
   statsPlayed: document.getElementById("stats-played"),
   statsWins: document.getElementById("stats-wins"),
   statsBest: document.getElementById("stats-best"),
+  statsBestTime: document.getElementById("stats-best-time"),
   modal: document.getElementById("result-modal"),
   resultTitle: document.getElementById("result-title"),
   resultMessage: document.getElementById("result-message"),
+  resultTime: document.getElementById("result-time"),
   revealedCode: document.getElementById("revealed-code"),
   newGameBtn: document.getElementById("new-game-btn"),
-  newMatchCodeBtn: document.getElementById("new-match-code-btn")
+  newMatchCodeBtn: document.getElementById("new-match-code-btn"),
+  backButtons: document.querySelectorAll("[data-back-home]")
 };
 
 let state = {
@@ -80,33 +95,16 @@ let state = {
   currentRow: 0,
   gameOver: false,
   matchCode: "",
+  winnerText: "",
   statsByMode: loadStats(),
-  winnerText: ""
+  statsExpanded: localStorage.getItem(STATS_UI_KEY) === "true",
+  timer: loadTimerState(),
+  timerFrame: null
 };
-
-function getColorHex(colorKey) {
-  return COLORS.find((c) => c.key === colorKey)?.hex ?? "#888";
-}
 
 function getColorIndex(colorKey) {
   const index = COLOR_INDEX_BY_KEY[colorKey];
   return Number.isInteger(index) ? index : null;
-}
-
-/*
-  Ensures peg color classes are exclusive.
-  This is used for board rendering and setup rendering.
-*/
-function setPegColor(pegEl, colorIndex) {
-  pegEl.classList.forEach((c) => {
-    if (c.startsWith("color-")) {
-      pegEl.classList.remove(c);
-    }
-  });
-
-  if (colorIndex !== null && colorIndex !== undefined) {
-    pegEl.classList.add(`color-${colorIndex}`);
-  }
 }
 
 function modeLabel(mode) {
@@ -146,7 +144,8 @@ function sanitizeStats(value) {
   return {
     played: Number(value?.played) || 0,
     wins: Number(value?.wins) || 0,
-    bestScore: Number(value?.bestScore) || null
+    bestScore: Number(value?.bestScore) || null,
+    bestTimeMs: Number(value?.bestTimeMs) || null
   };
 }
 
@@ -154,13 +153,16 @@ function saveStats() {
   localStorage.setItem(STORAGE_KEY, JSON.stringify(state.statsByMode));
 }
 
-function updateStats(mode, won, attempts) {
+function updateStats(mode, won, attempts, finalTimeMs) {
   const stats = state.statsByMode[mode];
   stats.played += 1;
   if (won) {
     stats.wins += 1;
     if (!stats.bestScore || attempts < stats.bestScore) {
       stats.bestScore = attempts;
+    }
+    if (Number.isFinite(finalTimeMs) && finalTimeMs > 0 && (!stats.bestTimeMs || finalTimeMs < stats.bestTimeMs)) {
+      stats.bestTimeMs = finalTimeMs;
     }
   }
   saveStats();
@@ -172,17 +174,134 @@ function renderStatsPanel() {
   el.statsMode.textContent = `Mode: ${modeLabel(mode)}`;
   el.statsPlayed.textContent = `Played: ${stats.played}`;
   el.statsWins.textContent = `Wins: ${stats.wins}`;
-  el.statsBest.textContent = `Best: ${stats.bestScore ?? "--"}`;
+  el.statsBest.textContent = `Best Score: ${stats.bestScore ?? "--"}`;
+  el.statsBestTime.textContent = `Best Time: ${stats.bestTimeMs ? formatTime(stats.bestTimeMs) : "--"}`;
+}
+
+function setStatsExpanded(expanded, persist = false) {
+  state.statsExpanded = expanded;
+  el.statsBody.classList.toggle("hidden", !expanded);
+  el.statsToggle.textContent = expanded ? "Stats ▴" : "Stats ▾";
+  if (persist) {
+    localStorage.setItem(STATS_UI_KEY, String(expanded));
+  }
+}
+
+/* ---------- Timer ---------- */
+
+function loadTimerState() {
+  return {
+    runStartMs: Number(localStorage.getItem(TIMER_KEYS.runStartMs)) || 0,
+    elapsedMs: Number(localStorage.getItem(TIMER_KEYS.elapsedMs)) || 0,
+    isRunning: localStorage.getItem(TIMER_KEYS.isRunning) === "true",
+    currentMode: localStorage.getItem(TIMER_KEYS.currentMode) || ""
+  };
+}
+
+function persistTimerState() {
+  localStorage.setItem(TIMER_KEYS.runStartMs, String(state.timer.runStartMs));
+  localStorage.setItem(TIMER_KEYS.elapsedMs, String(state.timer.elapsedMs));
+  localStorage.setItem(TIMER_KEYS.isRunning, String(state.timer.isRunning));
+  localStorage.setItem(TIMER_KEYS.currentMode, state.timer.currentMode || "");
+}
+
+function formatTime(ms) {
+  const safeMs = Math.max(0, ms);
+  const totalTenths = Math.floor(safeMs / 100);
+  const minutes = Math.floor(totalTenths / 600);
+  const seconds = Math.floor((totalTenths % 600) / 10);
+  const tenths = totalTenths % 10;
+  return `${String(minutes).padStart(2, "0")}:${String(seconds).padStart(2, "0")}.${tenths}`;
+}
+
+function getElapsedMs() {
+  if (!state.timer.isRunning) {
+    return state.timer.elapsedMs;
+  }
+  return state.timer.elapsedMs + (Date.now() - state.timer.runStartMs);
+}
+
+function renderTimer() {
+  el.timerReadout.textContent = `TIME ${formatTime(getElapsedMs())}`;
+}
+
+function tickLoop() {
+  renderTimer();
+  if (state.timer.isRunning) {
+    state.timerFrame = requestAnimationFrame(tickLoop);
+  }
+}
+
+function startTimer(mode) {
+  if (state.timer.isRunning) {
+    return;
+  }
+  state.timer.currentMode = mode || state.mode || "";
+  state.timer.runStartMs = Date.now();
+  state.timer.isRunning = true;
+  persistTimerState();
+  cancelAnimationFrame(state.timerFrame);
+  state.timerFrame = requestAnimationFrame(tickLoop);
+}
+
+function stopTimer() {
+  if (!state.timer.isRunning) {
+    return state.timer.elapsedMs;
+  }
+  state.timer.elapsedMs = getElapsedMs();
+  state.timer.isRunning = false;
+  state.timer.runStartMs = 0;
+  persistTimerState();
+  cancelAnimationFrame(state.timerFrame);
+  state.timerFrame = null;
+  renderTimer();
+  return state.timer.elapsedMs;
+}
+
+function resetTimer(mode = "") {
+  state.timer = {
+    runStartMs: 0,
+    elapsedMs: 0,
+    isRunning: false,
+    currentMode: mode
+  };
+  persistTimerState();
+  cancelAnimationFrame(state.timerFrame);
+  state.timerFrame = null;
+  renderTimer();
+}
+
+function maybeResumeTimer() {
+  if (state.timer.isRunning) {
+    cancelAnimationFrame(state.timerFrame);
+    state.timerFrame = requestAnimationFrame(tickLoop);
+  }
+  renderTimer();
+}
+
+function confirmAbandonIfNeeded() {
+  if (state.timer.isRunning || (!state.gameOver && state.mode)) {
+    return window.confirm("Abandon run?");
+  }
+  return true;
 }
 
 /* ---------- MATCH CODE HELPERS ---------- */
 
 function normalizeMatchCode(code) {
-  return code.toUpperCase().replace(/\s+/g, "").replace(/[^A-Z0-9-]/g, "");
+  return code.toUpperCase().replace(/[^A-Z0-9]/g, "");
+}
+
+function formatMatchCodeForInput(code) {
+  const compact = normalizeMatchCode(code).slice(0, 8);
+  const p1 = compact.slice(0, 2);
+  const p2 = compact.slice(2, 6);
+  const p3 = compact.slice(6, 8);
+  return [p1, p2, p3].filter(Boolean).join("-");
 }
 
 function isValidMatchCode(code) {
-  return /^[A-Z0-9]+(?:-[A-Z0-9]+)+$/.test(code) && code.length >= 8;
+  return /^[A-Z0-9]{2}-[A-Z0-9]{4}-[A-Z0-9]{2}$/.test(code);
 }
 
 function makeHumanCode() {
@@ -219,7 +338,7 @@ function codeFromMatchCode(code) {
   return Array.from({ length: CODE_LENGTH }, () => COLORS[Math.floor(rand() * COLORS.length)].key);
 }
 
-/* ---------- MODE FLOW UI ---------- */
+/* ---------- UI Flow ---------- */
 
 function hideAllScreens() {
   [
@@ -233,26 +352,41 @@ function hideAllScreens() {
   ].forEach((node) => node.classList.add("hidden"));
 }
 
-function goToStartScreen() {
+function abandonRunAndReturnHome() {
+  stopTimer();
+  resetTimer();
   state.mode = null;
-  state.matchCode = "";
   state.gameOver = false;
+  state.matchCode = "";
+  state.setupCode = [];
+  state.guesses = Array.from({ length: TOTAL_ROWS }, () => []);
+  state.feedback = Array.from({ length: TOTAL_ROWS }, () => []);
   hideAllScreens();
   el.startScreen.classList.remove("hidden");
   el.modal.classList.add("hidden");
   el.subtitle.textContent = "Select a mode to begin.";
+  setStatsExpanded(false);
   renderStatsPanel();
 }
 
+function goToStartScreen() {
+  resetTimer();
+  abandonRunAndReturnHome();
+}
+
 function beginSoloMode() {
+  if (!confirmAbandonIfNeeded()) return;
+  resetTimer(MODES.SOLO);
   state.mode = MODES.SOLO;
   state.secretCode = generateRandomCode();
   prepareGuessBoard();
   el.subtitle.textContent = "Solo: crack the hidden code.";
-  showGameScreen();
+  setStatsExpanded(false);
 }
 
 function beginTwoPlayerSetup() {
+  if (!confirmAbandonIfNeeded()) return;
+  resetTimer(MODES.TWO_PLAYERS);
   state.mode = MODES.TWO_PLAYERS;
   state.setupCode = [];
   hideAllScreens();
@@ -261,6 +395,7 @@ function beginTwoPlayerSetup() {
   buildSetupPalette();
   renderSetupRow();
   renderStatsPanel();
+  setStatsExpanded(false);
 }
 
 function showTwoPlayerPassScreen() {
@@ -270,11 +405,14 @@ function showTwoPlayerPassScreen() {
 }
 
 function showMatchChoice() {
+  if (!confirmAbandonIfNeeded()) return;
+  resetTimer(MODES.MATCH_CODE);
   state.mode = MODES.MATCH_CODE;
   hideAllScreens();
   el.matchChoice.classList.remove("hidden");
   el.subtitle.textContent = "Match Code: one-time codes for each match.";
   renderStatsPanel();
+  setStatsExpanded(false);
 }
 
 function showMatchCreate() {
@@ -298,12 +436,31 @@ function showGameScreen() {
   el.gameScreen.classList.remove("hidden");
   el.newMatchCodeBtn.classList.toggle("hidden", state.mode !== MODES.MATCH_CODE);
   renderStatsPanel();
+  setStatsExpanded(false);
 }
 
-/* ---------- BOARD + GAME RENDER ---------- */
+/* ---------- Board ---------- */
 
 function generateRandomCode() {
   return Array.from({ length: CODE_LENGTH }, () => COLORS[Math.floor(Math.random() * COLORS.length)].key);
+}
+
+function setPegColor(pegEl, colorIndex) {
+  pegEl.classList.forEach((c) => {
+    if (c.startsWith("color-")) {
+      pegEl.classList.remove(c);
+    }
+  });
+  if (colorIndex !== null && colorIndex !== undefined) {
+    pegEl.classList.add(`color-${colorIndex}`);
+  }
+}
+
+function animatePegPop(pegEl) {
+  pegEl.classList.remove("pop");
+  // force reflow for repeat animation
+  void pegEl.offsetWidth;
+  pegEl.classList.add("pop");
 }
 
 function prepareGuessBoard() {
@@ -339,6 +496,7 @@ function buildRows() {
 
     const slots = document.createElement("div");
     slots.className = "guess-slots";
+
     for (let slotIndex = 0; slotIndex < CODE_LENGTH; slotIndex += 1) {
       const slot = document.createElement("button");
       slot.type = "button";
@@ -413,10 +571,24 @@ function addColorToSetupCode(colorKey) {
 
 function addColorToCurrentRow(colorKey) {
   if (state.gameOver) return;
+
   const guess = state.guesses[state.currentRow];
   if (guess.length >= CODE_LENGTH) return;
+
+  // SOLO timing starts on first peg placement by player action.
+  if (state.mode === MODES.SOLO && !state.timer.isRunning && state.timer.elapsedMs === 0) {
+    startTimer(MODES.SOLO);
+  }
+
   guess.push(colorKey);
   renderBoardState();
+
+  const rowEl = el.rows.querySelectorAll(".row")[state.currentRow];
+  const pegEls = rowEl?.querySelectorAll(".slot .peg");
+  const pegEl = pegEls?.[guess.length - 1];
+  if (pegEl) {
+    animatePegPop(pegEl);
+  }
 }
 
 function onSlotClick(event) {
@@ -443,9 +615,9 @@ function clearCurrentRow() {
 }
 
 /*
-  Feedback calculation with duplicates:
-  1) First pass counts black pegs (exact matches) and nulls used positions.
-  2) Second pass counts white pegs by matching remaining colors only once.
+  Feedback with duplicates:
+  1) Count exact position matches (black pegs)
+  2) Count color-only matches once (white pegs)
 */
 function evaluateGuess(guess, secretCode) {
   const secretTemp = [...secretCode];
@@ -514,11 +686,18 @@ function renderBoardState() {
     });
 
     const feedback = rowEl.querySelectorAll(".feedback-peg");
-    feedback.forEach((peg, pegIndex) => {
+    feedback.forEach((pegEl, pegIndex) => {
       const pegColor = state.feedback[rowIndex][pegIndex];
-      if (pegColor === "black") peg.style.background = "#2f2f2f";
-      else if (pegColor === "white") peg.style.background = "#e9e6dd";
-      else peg.style.background = "radial-gradient(circle at 30% 30%, #b2ab9d, #91897a)";
+      pegEl.classList.remove("reveal");
+      if (pegColor === "black") {
+        pegEl.style.background = "#2f2f2f";
+        pegEl.classList.add("reveal");
+      } else if (pegColor === "white") {
+        pegEl.style.background = "#e9e6dd";
+        pegEl.classList.add("reveal");
+      } else {
+        pegEl.style.background = "radial-gradient(circle at 30% 30%, #b2ab9d, #91897a)";
+      }
     });
   });
 
@@ -555,6 +734,7 @@ function renderRevealedCode() {
 function finishGame(won) {
   state.gameOver = true;
   const attempts = state.currentRow + 1;
+  const finalTimeMs = stopTimer();
 
   if (state.mode === MODES.TWO_PLAYERS) {
     state.winnerText = won ? "Player 2 wins" : "Player 1 wins";
@@ -569,21 +749,36 @@ function finishGame(won) {
     el.resultMessage.textContent = `${state.winnerText || "No guesses left"}. Attempts used: ${attempts}.`;
   }
 
-  updateStats(state.mode, won, attempts);
+  const bestTime = state.statsByMode[state.mode]?.bestTimeMs;
+  el.resultTime.textContent = `Final Time: ${formatTime(finalTimeMs)}${bestTime ? ` | Best Time: ${formatTime(bestTime)}` : ""}`;
+
+  updateStats(state.mode, won, attempts, finalTimeMs);
   renderStatsPanel();
   revealSecretCode();
   renderRevealedCode();
   renderBoardState();
+  setStatsExpanded(true);
   el.modal.classList.remove("hidden");
 }
 
-/* ---------- EVENT WIRING ---------- */
+/* ---------- Events ---------- */
 
 el.soloModeBtn.addEventListener("click", beginSoloMode);
 el.twoPlayerModeBtn.addEventListener("click", beginTwoPlayerSetup);
 el.matchModeBtn.addEventListener("click", showMatchChoice);
 el.createMatchBtn.addEventListener("click", showMatchCreate);
 el.joinMatchBtn.addEventListener("click", showMatchJoin);
+
+el.statsToggle.addEventListener("click", () => {
+  setStatsExpanded(!state.statsExpanded, true);
+});
+
+el.backButtons.forEach((button) => {
+  button.addEventListener("click", () => {
+    if (!confirmAbandonIfNeeded()) return;
+    abandonRunAndReturnHome();
+  });
+});
 
 el.setupClearBtn.addEventListener("click", () => {
   state.setupCode = [];
@@ -599,6 +794,7 @@ el.setupConfirmBtn.addEventListener("click", () => {
 
 el.startGuessingBtn.addEventListener("click", () => {
   prepareGuessBoard();
+  startTimer(MODES.TWO_PLAYERS);
   el.subtitle.textContent = "Two Players: Player 2 guesses the hidden code.";
 });
 
@@ -611,23 +807,44 @@ el.copyMatchCodeBtn.addEventListener("click", async () => {
   }
 });
 
+el.shareMatchCodeBtn.addEventListener("click", async () => {
+  if (navigator.share) {
+    try {
+      await navigator.share({ title: "AA Master Mind Match Code", text: `Join my match with code: ${state.matchCode}` });
+      return;
+    } catch {
+      // fall back to copy
+    }
+  }
+  el.copyMatchCodeBtn.click();
+});
+
+el.joinInput.addEventListener("input", () => {
+  const formatted = formatMatchCodeForInput(el.joinInput.value);
+  el.joinInput.value = formatted;
+});
+
 el.startCreatedMatchBtn.addEventListener("click", () => {
   state.secretCode = codeFromMatchCode(state.matchCode);
   prepareGuessBoard();
+  startTimer(MODES.MATCH_CODE);
   el.subtitle.textContent = "Match started. This code is one-time for this match.";
 });
 
 el.startJoinedMatchBtn.addEventListener("click", () => {
-  const normalized = normalizeMatchCode(el.joinInput.value);
-  if (!isValidMatchCode(normalized)) {
-    el.joinError.textContent = "Invalid code format. Example: AA-7K2P-91";
+  const formatted = formatMatchCodeForInput(el.joinInput.value);
+  el.joinInput.value = formatted;
+
+  if (!isValidMatchCode(formatted)) {
+    el.joinError.textContent = "Invalid format. Example: KJ-W6TE-FR";
     return;
   }
 
-  state.matchCode = normalized;
+  state.matchCode = formatted;
   el.joinError.textContent = "";
-  state.secretCode = codeFromMatchCode(normalized);
+  state.secretCode = codeFromMatchCode(formatted);
   prepareGuessBoard();
+  startTimer(MODES.MATCH_CODE);
   el.subtitle.textContent = "Joined match. Same code gives the same secret.";
 });
 
@@ -638,7 +855,29 @@ el.clearBtn.addEventListener("click", clearCurrentRow);
 el.newGameBtn.addEventListener("click", goToStartScreen);
 el.newMatchCodeBtn.addEventListener("click", () => {
   el.modal.classList.add("hidden");
+  resetTimer(MODES.MATCH_CODE);
   showMatchCreate();
 });
 
-goToStartScreen();
+function registerServiceWorker() {
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("./service-worker.js").catch(() => {
+        // silent fail in unsupported/private contexts
+      });
+    });
+  }
+}
+
+function init() {
+  maybeResumeTimer();
+  hideAllScreens();
+  el.startScreen.classList.remove("hidden");
+  el.modal.classList.add("hidden");
+  el.subtitle.textContent = "Select a mode to begin.";
+  renderStatsPanel();
+  setStatsExpanded(false);
+  registerServiceWorker();
+}
+
+init();
