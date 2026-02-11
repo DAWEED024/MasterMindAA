@@ -1,140 +1,68 @@
-<!DOCTYPE html>
-<html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-    <title>AA Master Mind</title>
-    <meta name="theme-color" content="#c8c1b2" />
-    <link rel="manifest" href="./manifest.json" />
-    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
-    <link rel="preconnect" href="https://fonts.googleapis.com" />
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-    <link
-      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
-      rel="stylesheet"
-    />
-    <link rel="stylesheet" href="./style.css" />
-  </head>
-  <body>
-    <main class="app-shell">
-      <section class="board" aria-label="Mastermind travel board">
-        <header class="board-top">
-          <p class="molded-label" aria-hidden="true">AA Master Mind</p>
-          <h1>Mastermind</h1>
-          <p class="subtitle" id="subtitle">Select a mode to begin.</p>
-          <p class="timer-readout" id="timer-readout">TIME 00:00.0</p>
-        </header>
+You are working on an existing GitHub Pages PWA game "AA Master Mind" (index.html, style.css, script.js, manifest.json, service-worker.js).
+Do NOT rewrite the whole project. Add only the requested features with minimal, clean changes.
 
-        <section class="flow-screen" id="start-screen">
-          <h2>Choose Mode</h2>
-          <div class="action-stack">
-            <button id="solo-mode-btn" type="button">SOLO</button>
-            <button id="two-player-mode-btn" type="button">TWO PLAYERS</button>
-            <button id="match-mode-btn" type="button">MATCH CODE</button>
-          </div>
-        </section>
+FEATURES TO ADD (must all work)
 
-        <section class="flow-screen hidden" id="two-player-set-screen">
-          <button class="back-btn" data-back-home type="button">← Back</button>
-          <h2>Player 1: Set the secret code</h2>
-          <p class="hint">Pick 4 colors. Duplicates are allowed.</p>
-          <div class="setup-row" id="setup-row" aria-label="Secret setup row"></div>
-          <div class="palette" id="setup-palette" role="group" aria-label="Setup palette"></div>
-          <div class="action-stack horizontal">
-            <button id="setup-clear-btn" type="button">Clear</button>
-            <button id="setup-confirm-btn" type="button" disabled>Confirm Code</button>
-          </div>
-        </section>
+1) "HOW TO PLAY" screen
+- Add a new button on the start screen: "HOW TO PLAY".
+- When pressed, show a new flow screen (same styling as other flow screens) with a short explanation:
+  - Goal: guess the 4-color code in 6 turns.
+  - Duplicates allowed.
+  - Black peg = correct color + correct position.
+  - White peg = correct color in wrong position.
+- Add a visible "← Back" button to return to the start screen.
+- Do not change existing modes.
 
-        <section class="flow-screen hidden" id="two-player-pass-screen">
-          <button class="back-btn" data-back-home type="button">← Back</button>
-          <h2>Pass device to Player 2</h2>
-          <p class="hint">The code is hidden. Player 2 can now start guessing.</p>
-          <div class="action-stack">
-            <button id="start-guessing-btn" type="button">Start Guessing</button>
-          </div>
-        </section>
+2) Sound effects toggle (SFX)
+- Add a small toggle button or switch labeled "SFX: ON/OFF" visible on the start screen and also accessible in-game (e.g., in stats area or top header).
+- Default: ON.
+- Persist preference in localStorage (key: "aaMasterMindSfxEnabled").
+- Implement simple SFX using Web Audio API (no external audio files):
+  - "place peg" = short click/beep
+  - "submit" = slightly different beep
+  - "win" = short positive arpeggio
+  - "lose" = short low tone
+- IMPORTANT iOS/Safari: ensure audio context is unlocked only after a user gesture.
+  - Implement an unlockAudio() helper that resumes AudioContext on first interaction (touchstart/mousedown/keydown).
+  - Do not spam listeners; remove them after unlocking.
+- If SFX is OFF, no sound plays.
 
-        <section class="flow-screen hidden" id="match-choice-screen">
-          <button class="back-btn" data-back-home type="button">← Back</button>
-          <h2>Match Code</h2>
-          <p class="hint">Use one-time match codes for fair offline play.</p>
-          <div class="action-stack">
-            <button id="create-match-btn" type="button">Create Match Code</button>
-            <button id="join-match-btn" type="button">Join Match</button>
-          </div>
-        </section>
+Where to play SFX:
+- On placing a color into the current row (addColorToCurrentRow) => "place peg" sound
+- On submitGuess() => "submit" sound
+- On finishGame(won) => win or lose sound
 
-        <section class="flow-screen hidden" id="match-create-screen">
-          <button class="back-btn" data-back-home type="button">← Back</button>
-          <h2>One-time Match Code</h2>
-          <p class="hint">Send this code to the other player. Use a fresh code each match.</p>
-          <p class="match-code" id="generated-match-code">AA-0000-00</p>
-          <div class="action-stack horizontal tri">
-            <button id="copy-match-code-btn" type="button">Copy</button>
-            <button id="share-match-code-btn" type="button">Share</button>
-            <button id="start-created-match-btn" type="button">Start Match</button>
-          </div>
-        </section>
+3) Match Code display in results
+- In the result modal, when mode is MATCH_CODE, display:
+  - "Match Code: XX-XXXX-XX"
+- Add a "Copy Code" button in the modal when mode is MATCH_CODE.
+  - Copies the match code to clipboard and briefly updates subtitle or button text to confirm.
 
-        <section class="flow-screen hidden" id="match-join-screen">
-          <button class="back-btn" data-back-home type="button">← Back</button>
-          <h2>Join Match</h2>
-          <p class="hint">Type or paste code; it will auto-format.</p>
-          <label class="sr-only" for="join-match-input">Match code</label>
-          <input id="join-match-input" class="match-input" placeholder="KJ-W6TE-FR" maxlength="11" />
-          <p class="error-message" id="join-error"></p>
-          <div class="action-stack horizontal">
-            <button id="start-joined-match-btn" type="button">Start Match</button>
-          </div>
-        </section>
+4) Gentle haptic vibration (Android-friendly; safe no-op on iOS)
+- Add very subtle vibration feedback using navigator.vibrate, but ONLY if supported:
+  - On placing a peg: vibrate 10ms
+  - On submit: vibrate 15ms
+  - On win: vibrate pattern [20, 30, 20]
+  - On lose: vibrate pattern [40]
+- Must not throw errors on browsers that do not support vibration.
+- Respect user preference: if SFX is OFF, vibration can still run (do NOT tie vibration to SFX), but keep it subtle.
+  (Optionally you may add a separate toggle "HAPTIC: ON/OFF" only if it is minimal; otherwise always-on-if-supported is OK.)
 
-        <section class="game-screen hidden" id="game-screen">
-          <button class="back-btn" data-back-home type="button">← Back</button>
-          <div class="secret-panel" id="secret-panel" aria-label="Secret code panel"></div>
-          <section class="rows" id="rows" aria-label="Guess rows"></section>
-          <section class="controls" aria-label="Game controls">
-            <div class="palette" id="palette" role="group" aria-label="Color palette"></div>
-            <div class="action-buttons">
-              <button id="undo-btn" type="button">Undo</button>
-              <button id="clear-btn" type="button">Clear Row</button>
-              <button id="submit-btn" type="button" disabled>Submit Guess</button>
-            </div>
-          </section>
-        </section>
+IMPLEMENTATION NOTES
+- Keep existing HTML structure and IDs as much as possible.
+- Add new elements with new IDs/classes:
+  - how-to-play button: id="how-to-btn"
+  - how-to screen: id="howto-screen" with class "flow-screen hidden"
+  - modal copy button: id="copy-result-code-btn" (hidden unless match mode)
+  - sfx toggle: id="sfx-toggle"
+- Update CSS minimally to match existing retro style:
+  - Use same button styles as others.
+  - Ensure the new screen is consistent with other flow screens.
 
-        <section class="stats" aria-live="polite">
-          <button class="stats-toggle" id="stats-toggle" type="button">Stats ▾</button>
-          <div class="stats-body hidden" id="stats-body">
-            <p id="stats-mode">Mode: --</p>
-            <p id="stats-played">Played: 0</p>
-            <p id="stats-wins">Wins: 0</p>
-            <p id="stats-best">Best Score: --</p>
-            <p id="stats-best-time">Best Time: --</p>
-          </div>
-        </section>
-      </section>
-    </main>
-
-    <section
-      class="result-modal hidden"
-      id="result-modal"
-      role="dialog"
-      aria-modal="true"
-      aria-labelledby="result-title"
-    >
-      <div class="result-card">
-        <h2 id="result-title">Game Over</h2>
-        <p id="result-message"></p>
-        <p id="result-time"></p>
-        <div class="revealed-code" id="revealed-code" aria-label="Revealed secret code"></div>
-        <div class="action-stack horizontal">
-          <button id="new-game-btn" type="button">New Game</button>
-          <button id="new-match-code-btn" type="button" class="hidden">Generate New Match Code</button>
-        </div>
-      </div>
-    </section>
-
-    <script src="./script.js" defer></script>
-  </body>
-</html>
+DELIVERABLE
+- Output the complete updated contents of:
+  1) index.html
+  2) style.css
+  3) script.js
+- Do NOT output patch/diff format. Output full files ready to paste.
+- Ensure no console errors and everything works on iPadOS Safari + desktop Chrome.
