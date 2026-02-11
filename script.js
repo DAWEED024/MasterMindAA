@@ -112,7 +112,8 @@ let state = {
   timerFrame: null,
   sfxEnabled: localStorage.getItem(SFX_KEY) !== "false",
   audioCtx: null,
-  audioUnlocked: false
+  audioUnlocked: false,
+  userIsReviewingOldRows: false
 };
 
 function getColorIndex(colorKey) {
@@ -388,6 +389,72 @@ function playSfx(type) {
   }
 }
 
+function getScrollContainer() {
+  const rowsContainer = el.rows;
+  if (rowsContainer && rowsContainer.scrollHeight > rowsContainer.clientHeight + 1) {
+    return rowsContainer;
+  }
+  return document.scrollingElement || document.documentElement;
+}
+
+function getScrollMetrics(container) {
+  if (container === document.body || container === document.documentElement || container === document.scrollingElement) {
+    const clientHeight = window.innerHeight;
+    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
+    const scrollHeight = document.documentElement.scrollHeight;
+    return { scrollTop, clientHeight, scrollHeight };
+  }
+  return {
+    scrollTop: container.scrollTop,
+    clientHeight: container.clientHeight,
+    scrollHeight: container.scrollHeight
+  };
+}
+
+function isNearBottom(container) {
+  const { scrollTop, clientHeight, scrollHeight } = getScrollMetrics(container);
+  return (scrollHeight - (scrollTop + clientHeight)) < 120;
+}
+
+function scrollRowsToTop({ force = true } = {}) {
+  const container = getScrollContainer();
+  if (!container) return;
+
+  state.userIsReviewingOldRows = false;
+
+  if (container === document.body || container === document.documentElement || container === document.scrollingElement) {
+    window.scrollTo({ top: 0, behavior: force ? "auto" : "smooth" });
+  } else {
+    container.scrollTo({ top: 0, behavior: force ? "auto" : "smooth" });
+  }
+}
+
+function scrollToCurrentRow({ force = false } = {}) {
+  const rowsContainer = el.rows;
+  const currentRowEl = rowsContainer?.querySelectorAll(".row")[state.currentRow];
+  if (!currentRowEl) {
+    return;
+  }
+
+  const container = getScrollContainer();
+  const nearBottom = isNearBottom(container);
+  state.userIsReviewingOldRows = !nearBottom;
+
+  if (!force && state.userIsReviewingOldRows) {
+    return;
+  }
+
+  currentRowEl.scrollIntoView({
+    behavior: "smooth",
+    block: "nearest"
+  });
+}
+
+function updateReviewingStateFromScroll() {
+  const container = getScrollContainer();
+  state.userIsReviewingOldRows = !isNearBottom(container);
+}
+
 /* ---------- MATCH CODE HELPERS ---------- */
 
 function normalizeMatchCode(code) {
@@ -458,6 +525,7 @@ function hideAllScreens() {
 function abandonRunAndReturnHome() {
   stopTimer();
   resetTimer();
+  scrollRowsToTop({ force: true });
   state.mode = null;
   state.gameOver = false;
   state.matchCode = "";
@@ -474,6 +542,7 @@ function abandonRunAndReturnHome() {
 
 function goToStartScreen() {
   resetTimer();
+  scrollRowsToTop({ force: true });
   abandonRunAndReturnHome();
 }
 
@@ -548,6 +617,8 @@ function showGameScreen() {
   el.newMatchCodeBtn.classList.toggle("hidden", state.mode !== MODES.MATCH_CODE);
   renderStatsPanel();
   setStatsExpanded(false);
+  setupScrollTracking();
+  scrollToCurrentRow({ force: true });
 }
 
 /* ---------- Board ---------- */
@@ -575,6 +646,7 @@ function animatePegPop(pegEl) {
 }
 
 function prepareGuessBoard() {
+  scrollRowsToTop({ force: true });
   state.guesses = Array.from({ length: TOTAL_ROWS }, () => []);
   state.feedback = Array.from({ length: TOTAL_ROWS }, () => []);
   state.currentRow = 0;
@@ -585,6 +657,7 @@ function prepareGuessBoard() {
   buildPalette(el.palette, addColorToCurrentRow);
   renderBoardState();
   showGameScreen();
+  scrollToCurrentRow({ force: true });
 }
 
 function buildSecretPanel() {
@@ -695,6 +768,7 @@ function addColorToCurrentRow(colorKey) {
   playSfx("place");
   vibrate(10);
   renderBoardState();
+  scrollToCurrentRow();
 
   const rowEl = el.rows.querySelectorAll(".row")[state.currentRow];
   const pegEls = rowEl?.querySelectorAll(".slot .peg");
@@ -784,6 +858,7 @@ function submitGuess() {
 
   state.currentRow += 1;
   renderBoardState();
+  scrollToCurrentRow();
 }
 
 function renderBoardState() {
@@ -1008,6 +1083,18 @@ el.copyResultCodeBtn.addEventListener("click", async () => {
   }
 });
 
+function setupScrollTracking() {
+  const container = getScrollContainer();
+  if (!container) return;
+
+  const target = (container === document.body || container === document.documentElement || container === document.scrollingElement)
+    ? window
+    : container;
+
+  target.removeEventListener("scroll", updateReviewingStateFromScroll);
+  target.addEventListener("scroll", updateReviewingStateFromScroll, { passive: true });
+}
+
 function registerServiceWorker() {
   if ("serviceWorker" in navigator) {
     window.addEventListener("load", () => {
@@ -1027,6 +1114,8 @@ function init() {
   renderStatsPanel();
   setStatsExpanded(false);
   updateSfxToggleLabel();
+  setupScrollTracking();
+  scrollRowsToTop({ force: true });
   ["touchstart", "mousedown", "keydown"].forEach((evt) =>
     document.addEventListener(evt, unlockAudio, { passive: true })
   );
