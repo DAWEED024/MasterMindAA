@@ -23,6 +23,8 @@ const COLORS = [
   { key: "orange", hex: "#c89a6e" }
 ];
 
+const COLOR_INDEX_BY_KEY = Object.fromEntries(COLORS.map((color, index) => [color.key, index]));
+
 const STORAGE_KEY = "aaMasterMindStatsByMode";
 const EMPTY_STATS = { played: 0, wins: 0, bestScore: null };
 
@@ -84,6 +86,27 @@ let state = {
 
 function getColorHex(colorKey) {
   return COLORS.find((c) => c.key === colorKey)?.hex ?? "#888";
+}
+
+function getColorIndex(colorKey) {
+  const index = COLOR_INDEX_BY_KEY[colorKey];
+  return Number.isInteger(index) ? index : null;
+}
+
+/*
+  Ensures peg color classes are exclusive.
+  This is used for board rendering and setup rendering.
+*/
+function setPegColor(pegEl, colorIndex) {
+  pegEl.classList.forEach((c) => {
+    if (c.startsWith("color-")) {
+      pegEl.classList.remove(c);
+    }
+  });
+
+  if (colorIndex !== null && colorIndex !== undefined) {
+    pegEl.classList.add(`color-${colorIndex}`);
+  }
 }
 
 function modeLabel(mode) {
@@ -301,6 +324,9 @@ function buildSecretPanel() {
   for (let i = 0; i < CODE_LENGTH; i += 1) {
     const slot = document.createElement("div");
     slot.className = "secret-slot hidden-code";
+    const peg = document.createElement("div");
+    peg.className = "peg";
+    slot.appendChild(peg);
     el.secretPanel.appendChild(slot);
   }
 }
@@ -320,6 +346,9 @@ function buildRows() {
       slot.dataset.row = String(rowIndex);
       slot.dataset.slot = String(slotIndex);
       slot.setAttribute("aria-label", `Row ${rowIndex + 1} slot ${slotIndex + 1}`);
+      const peg = document.createElement("div");
+      peg.className = "peg";
+      slot.appendChild(peg);
       slot.addEventListener("click", onSlotClick);
       slots.appendChild(slot);
     }
@@ -361,7 +390,10 @@ function renderSetupRow() {
     btn.type = "button";
     btn.className = "slot";
     const color = state.setupCode[i];
-    btn.style.backgroundColor = color ? getColorHex(color) : "";
+    const peg = document.createElement("div");
+    peg.className = "peg";
+    setPegColor(peg, color ? getColorIndex(color) : null);
+    btn.appendChild(peg);
     btn.addEventListener("click", () => {
       if (i < state.setupCode.length) {
         state.setupCode.splice(i, 1);
@@ -474,7 +506,10 @@ function renderBoardState() {
     const slots = rowEl.querySelectorAll(".slot");
     slots.forEach((slotEl, slotIndex) => {
       const color = state.guesses[rowIndex][slotIndex];
-      slotEl.style.backgroundColor = color ? getColorHex(color) : "";
+      const peg = slotEl.querySelector(".peg");
+      if (peg) {
+        setPegColor(peg, color ? getColorIndex(color) : null);
+      }
       slotEl.disabled = rowIndex !== state.currentRow || state.gameOver;
     });
 
@@ -497,7 +532,10 @@ function revealSecretCode() {
   const slots = el.secretPanel.querySelectorAll(".secret-slot");
   slots.forEach((slot, index) => {
     slot.classList.remove("hidden-code");
-    slot.style.backgroundColor = getColorHex(state.secretCode[index]);
+    const peg = slot.querySelector(".peg");
+    if (peg) {
+      setPegColor(peg, getColorIndex(state.secretCode[index]));
+    }
   });
 }
 
@@ -506,7 +544,10 @@ function renderRevealedCode() {
   state.secretCode.forEach((key) => {
     const peg = document.createElement("div");
     peg.className = "secret-slot";
-    peg.style.backgroundColor = getColorHex(key);
+    const pegInner = document.createElement("div");
+    pegInner.className = "peg";
+    setPegColor(pegInner, getColorIndex(key));
+    peg.appendChild(pegInner);
     el.revealedCode.appendChild(peg);
   });
 }
