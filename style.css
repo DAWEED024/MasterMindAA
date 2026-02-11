@@ -1,0 +1,289 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/style.css b/style.css
+new file mode 100644
+index 0000000000000000000000000000000000000000..ff197c07b46bdfb5d989b701215c7fe253d53d08
+--- /dev/null
++++ b/style.css
+@@ -0,0 +1,279 @@
++/* Retro travel-board styling with subtle molded-plastic effects. */
++:root {
++  --text: #49433a;
++  --board: #c8c1b2;
++  --board-edge: #b7ad98;
++  --hole: #a6a096;
++  --hole-inner: #8f897f;
++  --peg-border: #5e5850;
++  --feedback-hole: #b2ab9d;
++  --panel-cover: #6c665d;
++}
++
++* { box-sizing: border-box; }
++
++body {
++  margin: 0;
++  min-height: 100vh;
++  font-family: "Press Start 2P", monospace;
++  background: radial-gradient(circle at top, #e5dfd1, #d4cebf 62%, #c9c2b1);
++  color: var(--text);
++}
++
++.app-shell {
++  padding: 1.2rem 0.8rem 2rem;
++  display: grid;
++  place-items: center;
++}
++
++.board {
++  width: min(920px, 100%);
++  background: var(--board);
++  border-radius: 20px;
++  padding: 1rem;
++  border: 4px solid var(--board-edge);
++  box-shadow: inset 3px 3px 5px rgba(255,255,255,.22), inset -4px -4px 6px rgba(105,95,82,.35), 0 12px 20px rgba(75,67,57,.28);
++}
++
++.board-top {
++  background: #bcb5a7;
++  border-radius: 14px;
++  padding: 0.7rem;
++  margin-bottom: 1rem;
++  box-shadow: inset 2px 2px 3px rgba(255,255,255,.2), inset -2px -2px 4px rgba(90,81,70,.35);
++}
++
++h1 {
++  margin: 0 0 0.6rem;
++  text-align: center;
++  font-size: clamp(0.78rem, 2.4vw, 1rem);
++}
++
++h2 {
++  margin: 0 0 0.7rem;
++  font-size: 0.66rem;
++}
++
++.molded-label {
++  margin: 0 0 0.45rem;
++  font-size: 0.55rem;
++  color: #a79f8f;
++  opacity: .55;
++  text-shadow: 1px 1px 0 rgba(80,74,64,.3), -1px -1px 0 rgba(248,242,229,.2);
++}
++
++.subtitle,
++.hint {
++  margin: 0;
++  font-size: 0.53rem;
++  line-height: 1.5;
++}
++
++.flow-screen,
++.game-screen {
++  background: #b7af9f;
++  border-radius: 12px;
++  padding: 0.8rem;
++  box-shadow: inset 1px 1px 2px rgba(255,255,255,.18), inset -2px -2px 4px rgba(94,84,72,.35);
++  margin-bottom: 0.8rem;
++}
++
++.hidden { display: none !important; }
++
++.action-stack {
++  display: grid;
++  gap: 0.5rem;
++  margin-top: 0.8rem;
++}
++
++.action-stack.horizontal {
++  grid-template-columns: repeat(2, minmax(120px, 1fr));
++}
++
++button,
++.match-input {
++  font-family: inherit;
++  border: 2px solid #706759;
++  border-radius: 8px;
++  background: #cdc5b5;
++  color: #3f392f;
++  box-shadow: inset 1px 1px 2px rgba(255,255,255,.35), inset -2px -2px 3px rgba(92,83,72,.32);
++}
++
++button {
++  cursor: pointer;
++  padding: 0.62rem 0.5rem;
++  font-size: clamp(0.44rem, 1.5vw, 0.6rem);
++}
++
++button:disabled { opacity: .45; cursor: not-allowed; }
++
++.match-code {
++  margin: 0.85rem 0 0;
++  font-size: clamp(0.85rem, 3.8vw, 1.1rem);
++  text-align: center;
++  letter-spacing: 2px;
++}
++
++.match-input {
++  margin-top: 0.7rem;
++  width: 100%;
++  padding: 0.7rem;
++  font-size: 0.65rem;
++  text-transform: uppercase;
++}
++
++.error-message {
++  min-height: 0.75rem;
++  margin: 0.5rem 0 0;
++  color: #6f2f2f;
++  font-size: 0.5rem;
++}
++
++.setup-row {
++  display: grid;
++  grid-template-columns: repeat(4, minmax(42px, 74px));
++  justify-content: center;
++  gap: 0.6rem;
++  margin: 0.8rem 0;
++}
++
++.secret-panel {
++  display: grid;
++  grid-template-columns: repeat(4, 1fr);
++  gap: 0.6rem;
++  max-width: 360px;
++  margin: 0 auto 0.9rem;
++  padding: 0.5rem;
++  border-radius: 14px;
++  background: #a69f90;
++  box-shadow: inset 2px 2px 4px rgba(255,255,255,.22), inset -3px -3px 6px rgba(95,84,71,.35);
++}
++
++.rows { display: grid; gap: 0.45rem; margin-bottom: 1rem; }
++.row {
++  display: grid;
++  grid-template-columns: 1fr auto;
++  gap: 0.7rem;
++  align-items: center;
++  background: #b7af9f;
++  border-radius: 12px;
++  padding: 0.4rem;
++  box-shadow: inset 1px 1px 2px rgba(255,255,255,.18), inset -2px -2px 4px rgba(94,84,72,.35);
++}
++.row.current { outline: 2px solid #8f8779; }
++.guess-slots { display: grid; grid-template-columns: repeat(4, minmax(40px, 1fr)); gap: 0.6rem; }
++.feedback-grid {
++  width: 58px;
++  height: 58px;
++  padding: 6px;
++  display: grid;
++  gap: 6px;
++  grid-template-columns: repeat(2, 1fr);
++  border-radius: 10px;
++  background: #a59e90;
++  box-shadow: inset 1px 1px 2px rgba(255,255,255,.15), inset -2px -2px 3px rgba(91,81,70,.38);
++}
++
++.slot,
++.secret-slot,
++.feedback-peg,
++.palette-color {
++  border-radius: 50%;
++}
++
++.slot,
++.secret-slot {
++  width: 100%;
++  aspect-ratio: 1;
++  border: 2px solid var(--peg-border);
++  background: radial-gradient(circle at 30% 30%, var(--hole), var(--hole-inner));
++  box-shadow: inset 2px 2px 4px rgba(255,255,255,.18), inset -3px -3px 5px rgba(67,60,52,.48);
++  cursor: pointer;
++}
++
++.secret-slot { cursor: default; }
++.secret-slot.hidden-code { background: var(--panel-cover); border-color: #4e4840; }
++
++.feedback-peg {
++  border: 1px solid #696255;
++  background: radial-gradient(circle at 30% 30%, var(--feedback-hole), #91897a);
++  box-shadow: inset 1px 1px 2px rgba(255,255,255,.2), inset -1px -1px 2px rgba(70,63,53,.4);
++}
++
++.controls {
++  border-radius: 12px;
++  padding: 0.7rem;
++  background: #b6ae9f;
++  box-shadow: inset 2px 2px 3px rgba(255,255,255,.15), inset -2px -2px 4px rgba(92,83,71,.34);
++}
++
++.palette { display: grid; grid-template-columns: repeat(6, minmax(42px, 1fr)); gap: 0.5rem; margin-bottom: 0.8rem; }
++.palette-color {
++  width: 100%;
++  aspect-ratio: 1;
++  border: 2px solid var(--peg-border);
++  box-shadow: inset 2px 2px 3px rgba(255,255,255,.2), inset -2px -2px 4px rgba(70,63,54,.45);
++  cursor: pointer;
++}
++
++.action-buttons { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.45rem; }
++
++.stats {
++  margin-top: 0.5rem;
++  padding: 0.6rem;
++  border-radius: 10px;
++  background: #b9b1a2;
++  box-shadow: inset 2px 2px 3px rgba(255,255,255,.18), inset -2px -2px 3px rgba(95,86,74,.35);
++}
++.stats h2 { margin: 0 0 0.55rem; }
++.stats p { margin: 0.25rem 0; font-size: 0.55rem; }
++
++.result-modal {
++  position: fixed;
++  inset: 0;
++  display: grid;
++  place-items: center;
++  padding: 1rem;
++  background: rgba(47,42,35,.55);
++}
++
++.result-card {
++  width: min(470px, 95%);
++  text-align: center;
++  border-radius: 16px;
++  border: 4px solid #b2a996;
++  padding: 1rem;
++  background: #cdc6b8;
++  box-shadow: inset 2px 2px 4px rgba(255,255,255,.2), inset -3px -3px 5px rgba(99,90,78,.32);
++}
++
++.revealed-code {
++  margin: 0.8rem auto;
++  display: grid;
++  grid-template-columns: repeat(4, 56px);
++  justify-content: center;
++  gap: 0.45rem;
++}
++
++.sr-only {
++  position: absolute;
++  width: 1px;
++  height: 1px;
++  padding: 0;
++  margin: -1px;
++  overflow: hidden;
++  clip: rect(0, 0, 0, 0);
++  white-space: nowrap;
++  border: 0;
++}
++
++@media (max-width: 700px) {
++  .action-buttons,
++  .action-stack.horizontal {
++    grid-template-columns: 1fr;
++  }
++
++  .palette { grid-template-columns: repeat(3, 1fr); }
++  .feedback-grid { width: 52px; height: 52px; }
++}
+ 
+EOF
+)
