@@ -1,0 +1,137 @@
+ (cd "$(git rev-parse --show-toplevel)" && git apply --3way <<'EOF' 
+diff --git a/index.html b/index.html
+new file mode 100644
+index 0000000000000000000000000000000000000000..faf5bd8a9f85b2c5dff83491655b170cce12d64e
+--- /dev/null
++++ b/index.html
+@@ -0,0 +1,127 @@
++<!DOCTYPE html>
++<html lang="en">
++  <head>
++    <meta charset="UTF-8" />
++    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
++    <title>AA Master Mind</title>
++    <link rel="preconnect" href="https://fonts.googleapis.com" />
++    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
++    <link
++      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
++      rel="stylesheet"
++    />
++    <link rel="stylesheet" href="style.css" />
++  </head>
++  <body>
++    <main class="app-shell">
++      <section class="board" aria-label="Mastermind travel board">
++        <header class="board-top">
++          <p class="molded-label" aria-hidden="true">AA Master Mind</p>
++          <h1>Mastermind</h1>
++          <p class="subtitle" id="subtitle">Select a mode to begin.</p>
++        </header>
++
++        <!-- START + MODE FLOW SCREENS -->
++        <section class="flow-screen" id="start-screen">
++          <h2>Choose Mode</h2>
++          <div class="action-stack">
++            <button id="solo-mode-btn" type="button">SOLO</button>
++            <button id="two-player-mode-btn" type="button">TWO PLAYERS</button>
++            <button id="match-mode-btn" type="button">MATCH CODE</button>
++          </div>
++        </section>
++
++        <section class="flow-screen hidden" id="two-player-set-screen">
++          <h2>Player 1: Set the secret code</h2>
++          <p class="hint">Pick 4 colors. Duplicates are allowed.</p>
++          <div class="setup-row" id="setup-row" aria-label="Secret setup row"></div>
++          <div class="palette" id="setup-palette" role="group" aria-label="Setup palette"></div>
++          <div class="action-stack horizontal">
++            <button id="setup-clear-btn" type="button">Clear</button>
++            <button id="setup-confirm-btn" type="button" disabled>Confirm Code</button>
++          </div>
++        </section>
++
++        <section class="flow-screen hidden" id="two-player-pass-screen">
++          <h2>Pass device to Player 2</h2>
++          <p class="hint">The code is hidden. Player 2 can now start guessing.</p>
++          <div class="action-stack">
++            <button id="start-guessing-btn" type="button">Start Guessing</button>
++          </div>
++        </section>
++
++        <section class="flow-screen hidden" id="match-choice-screen">
++          <h2>Match Code</h2>
++          <p class="hint">Use one-time match codes for fair offline play.</p>
++          <div class="action-stack">
++            <button id="create-match-btn" type="button">Create Match Code</button>
++            <button id="join-match-btn" type="button">Join Match</button>
++          </div>
++        </section>
++
++        <section class="flow-screen hidden" id="match-create-screen">
++          <h2>One-time Match Code</h2>
++          <p class="hint">Send this code to the other player.</p>
++          <p class="match-code" id="generated-match-code">AA-0000-00</p>
++          <div class="action-stack horizontal">
++            <button id="copy-match-code-btn" type="button">Copy</button>
++            <button id="start-created-match-btn" type="button">Start Match</button>
++          </div>
++        </section>
++
++        <section class="flow-screen hidden" id="match-join-screen">
++          <h2>Join Match</h2>
++          <p class="hint">Paste/type code (letters, digits, hyphens).</p>
++          <label class="sr-only" for="join-match-input">Match code</label>
++          <input id="join-match-input" class="match-input" placeholder="AA-7K2P-91" maxlength="20" />
++          <p class="error-message" id="join-error"></p>
++          <div class="action-stack horizontal">
++            <button id="start-joined-match-btn" type="button">Start Match</button>
++          </div>
++        </section>
++
++        <!-- MAIN BOARD -->
++        <section class="game-screen hidden" id="game-screen">
++          <div class="secret-panel" id="secret-panel" aria-label="Secret code panel"></div>
++          <section class="rows" id="rows" aria-label="Guess rows"></section>
++          <section class="controls" aria-label="Game controls">
++            <div class="palette" id="palette" role="group" aria-label="Color palette"></div>
++            <div class="action-buttons">
++              <button id="undo-btn" type="button">Undo</button>
++              <button id="clear-btn" type="button">Clear Row</button>
++              <button id="submit-btn" type="button" disabled>Submit Guess</button>
++            </div>
++          </section>
++        </section>
++
++        <section class="stats" aria-live="polite">
++          <h2>Stats</h2>
++          <p id="stats-mode">Mode: --</p>
++          <p id="stats-played">Played: 0</p>
++          <p id="stats-wins">Wins: 0</p>
++          <p id="stats-best">Best: --</p>
++        </section>
++      </section>
++    </main>
++
++    <section
++      class="result-modal hidden"
++      id="result-modal"
++      role="dialog"
++      aria-modal="true"
++      aria-labelledby="result-title"
++    >
++      <div class="result-card">
++        <h2 id="result-title">Game Over</h2>
++        <p id="result-message"></p>
++        <div class="revealed-code" id="revealed-code" aria-label="Revealed secret code"></div>
++        <div class="action-stack horizontal">
++          <button id="new-game-btn" type="button">New Game</button>
++          <button id="new-match-code-btn" type="button" class="hidden">Generate New Match Code</button>
++        </div>
++      </div>
++    </section>
++
++    <script src="script.js"></script>
++  </body>
++</html>
+ 
+EOF
+)
