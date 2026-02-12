@@ -1,4 +1,4 @@
-const CACHE_NAME = "aa-mastermind-v2";
+const CACHE_NAME = "aa-mastermind-v3";
 const ASSETS = [
   "./",
   "./index.html",
