@@ -1,4 +1,4 @@
-const CACHE_NAME = "aa-mastermind-v5";
+const CACHE_NAME = "aa-mastermind-v6";
 const ASSETS = [
   "./",
   "./index.html",
@@ -28,6 +28,25 @@ self.addEventListener("fetch", (event) => {
     return;
   }
 
+  if (event.request.mode === "navigate") {
+    event.respondWith(
+      caches.match("./index.html").then((cachedIndex) => {
+        if (cachedIndex) {
+          return cachedIndex;
+        }
+
+        return fetch(event.request)
+          .then((response) => {
+            const copy = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put("./index.html", copy));
+            return response;
+          })
+          .catch(() => caches.match("./index.html"));
+      })
+    );
+    return;
+  }
+
   event.respondWith(
     caches.match(event.request).then((cached) => {
       if (cached) {
@@ -40,7 +59,7 @@ self.addEventListener("fetch", (event) => {
           caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
           return response;
         })
-        .catch(() => caches.match("./index.html"));
+        .catch(() => cached || Response.error());
     })
   );
 });
