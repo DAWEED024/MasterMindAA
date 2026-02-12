@@ -1,54 +1,255 @@
-You are working on the existing GitHub Pages PWA game "AA Master Mind".
-Do NOT rewrite the whole project. Make minimal, clean changes and keep the retro travel-board style.
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
+    <title>AA Master Mind</title>
+    <meta name="theme-color" content="#c8c1b2" />
+    <link rel="manifest" href="./manifest.json" />
+    <link rel="apple-touch-icon" href="./icons/icon-192.png" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Press+Start+2P&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="./style.css" />
+  </head>
+  <body>
+    <main class="app-shell">
+      <section class="board" aria-label="Mastermind travel board">
+        <header class="board-top">
+          <p class="molded-label" aria-hidden="true">AA Master Mind</p>
+          <h1>Mastermind</h1>
+          <p class="subtitle" id="subtitle">Select a mode to begin.</p>
+          <div class="header-tools">
+            <p class="timer-readout" id="timer-readout">TIME 00:00.0</p>
+            <button id="sfx-toggle" class="sfx-toggle" type="button">SFX: ON</button>
+          </div>
+        </header>
 
-GOAL
-Expand the existing "HOW TO PLAY" screen so it clearly explains ALL modes and key UI actions.
-Keep the text short, readable on mobile, and consistent with the retro style.
+        <section class="flow-screen" id="start-screen">
+          <h2>Choose Mode</h2>
+          <div class="action-stack">
+            <button id="solo-mode-btn" type="button">SOLO</button>
+            <button id="daily-mode-btn" type="button">DAILY</button>
+            <button id="leaderboard-btn" type="button">LEADERBOARD</button>
+            <button id="two-player-mode-btn" type="button">TWO PLAYERS</button>
+            <button id="match-mode-btn" type="button">MATCH CODE</button>
+            <button id="how-to-btn" type="button">HOW TO PLAY</button>
+            <button id="lifetime-btn" type="button">LIFETIME STATS</button>
+          </div>
+        </section>
 
-REQUIREMENTS
+        <section class="flow-screen hidden" id="howto-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>How to Play</h2>
 
-1) Update HOW TO PLAY content (no new modes)
-- Rework the how-to screen text to include these sections (use headings + short bullets):
-  A) Basics
-    - Goal: guess the 4-color code in 6 turns.
-    - Duplicates allowed.
-    - Black peg = correct color + correct position.
-    - White peg = correct color in wrong position.
-    - Time starts when you place the first peg (where applicable).
-  B) Controls
-    - Tap colors to fill the current row.
-    - Tap a placed peg in the current row to remove it.
-    - Undo = removes last peg.
-    - Clear Row = clears the current row.
-    - Submit Guess = checks your row (enabled only when 4 pegs are placed).
-  C) Modes (must mention all)
-    - SOLO: random secret, play anytime, results count in stats.
-    - TWO PLAYERS: Player 1 sets the secret, pass device, Player 2 guesses.
-    - MATCH CODE: both players enter the same code to get the same secret (fair offline race). Use a fresh code each match.
-    - DAILY (Official): same secret for the whole day (UTC). One official try per device per day. Your result can appear on the leaderboard.
-    - DAILY PRACTICE: same daily secret, unlimited practice, does NOT post to leaderboard / does not lock your daily attempt.
-  D) Tips (very short)
-    - Start with 4 different colors to map the code.
-    - Use feedback to narrow positions, not just colors.
-    - Duplicates are possible, so a color can repeat.
+          <h3 class="howto-title">Basics</h3>
+          <ul class="howto-list hint">
+            <li>Goal: guess the 4-color code in 6 turns.</li>
+            <li>Duplicates are allowed.</li>
+            <li>Black peg = correct color + correct position.</li>
+            <li>White peg = correct color in wrong position.</li>
+            <li>Time starts when you place the first peg (where applicable).</li>
+          </ul>
 
-- Add a final single-line note:
-  "Daily uses UTC day (not local time)."
+          <h3 class="howto-title">Controls</h3>
+          <ul class="howto-list hint">
+            <li>Tap colors to fill the current row.</li>
+            <li>Tap a placed peg in the current row to remove it.</li>
+            <li>Undo = removes last peg.</li>
+            <li>Clear Row = clears the current row.</li>
+            <li>Submit Guess checks your row (enabled only with 4 pegs).</li>
+          </ul>
 
-2) Layout and styling
-- Keep everything inside the existing howto flow-screen.
-- Make it scannable:
-  - Use small section titles (h3 or styled strong labels)
-  - Short bullet lists
-  - Avoid long paragraphs
-- Ensure it looks good on iPad and small phones (no horizontal scrolling).
+          <h3 class="howto-title">Modes</h3>
+          <ul class="howto-list hint">
+            <li>SOLO: random secret, play anytime, results count in stats.</li>
+            <li>TWO PLAYERS: Player 1 sets the secret, pass device, Player 2 guesses.</li>
+            <li>MATCH CODE: same code gives same secret for fair offline race; use a fresh code each match.</li>
+            <li>DAILY (Official): same secret for the UTC day, one official try per device, can appear on leaderboard.</li>
+            <li>DAILY PRACTICE: same daily secret, unlimited practice, does not post or lock daily attempt.</li>
+          </ul>
 
-3) No functional changes
-- Do not change game logic, modes, timers, or leaderboard.
-- Only update index.html how-to content and minimal CSS if needed.
+          <h3 class="howto-title">Tips</h3>
+          <ul class="howto-list hint">
+            <li>Start with 4 different colors to map the code.</li>
+            <li>Use feedback to narrow positions, not just colors.</li>
+            <li>Duplicates are possible, so a color can repeat.</li>
+          </ul>
 
-DELIVERABLE
-Output complete updated contents of:
-1) index.html
-2) style.css (only if you changed it)
-Do NOT output patch/diff.
+          <p class="hint howto-note">Daily uses UTC day (not local time).</p>
+        </section>
+
+        
+
+        
+
+        <section class="flow-screen hidden" id="lifetime-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>Lifetime Stats</h2>
+          <p class="hint" id="life-played">Played: 0</p>
+          <p class="hint" id="life-wins">Wins: 0</p>
+          <p class="hint" id="life-rate">Win Rate: --</p>
+          <p class="hint" id="life-best-attempts">Best Attempts: --</p>
+          <p class="hint" id="life-best-time">Best Time: --</p>
+          <p class="hint" id="life-avg-attempts">Avg Attempts (wins): --</p>
+          <p class="hint" id="life-avg-time">Avg Time (wins): --</p>
+          <div class="action-stack horizontal">
+            <button id="lifetime-reset-btn" type="button">Reset Stats</button>
+          </div>
+        </section>
+
+        <section class="flow-screen hidden" id="daily-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>Daily Challenge</h2>
+          <p class="hint">One official run per UTC day per device.</p>
+          <label class="sr-only" for="daily-nickname-input">Nickname</label>
+          <input id="daily-nickname-input" class="match-input" placeholder="Nickname (2-12)" maxlength="12" />
+          <p class="error-message" id="daily-nickname-error"></p>
+          <div class="action-stack horizontal">
+            <button id="daily-start-btn" type="button" disabled>Start Daily</button>
+            <button id="daily-practice-btn" type="button">Practice Daily</button>
+          </div>
+        </section>
+
+        <section class="flow-screen hidden" id="leaderboard-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>Daily Leaderboard</h2>
+          <p class="hint" id="leaderboard-date">UTC Date: --</p>
+          <div class="date-toggle">
+            <button id="lb-today-btn" type="button">Today</button>
+            <button id="lb-yesterday-btn" type="button">Yesterday</button>
+            <button id="leaderboard-refresh-btn" type="button">Refresh</button>
+          </div>
+          <p class="hint" id="leaderboard-updated">Updated: --:-- UTC</p>
+          <p class="hint" id="leaderboard-your-rank">No entry yet today.</p>
+          <section class="podium" id="leaderboard-podium"></section>
+          <p class="hint" id="leaderboard-status">Loading leaderboard…</p>
+          <div class="leaderboard-skeleton hidden" id="leaderboard-skeleton"></div>
+          <div class="leaderboard-list" id="leaderboard-list"></div>
+          <p class="hint lb-footnote">One try per device per day. UTC day.</p>
+        </section>
+
+        <section class="flow-screen hidden" id="daily-locked-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>Daily already played today.</h2>
+          <p class="hint" id="daily-locked-summary"></p>
+          <div class="action-stack">
+            <button id="daily-locked-practice-btn" type="button">Practice Daily (no score)</button>
+          </div>
+        </section>
+
+        <section class="flow-screen hidden" id="two-player-set-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>Player 1: Set the secret code</h2>
+          <p class="hint">Pick 4 colors. Duplicates are allowed.</p>
+          <div class="setup-row" id="setup-row" aria-label="Secret setup row"></div>
+          <div class="palette" id="setup-palette" role="group" aria-label="Setup palette"></div>
+          <div class="action-stack horizontal">
+            <button id="setup-clear-btn" type="button">Clear</button>
+            <button id="setup-confirm-btn" type="button" disabled>Confirm Code</button>
+          </div>
+        </section>
+
+        <section class="flow-screen hidden" id="two-player-pass-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>Pass device to Player 2</h2>
+          <p class="hint">The code is hidden. Player 2 can now start guessing.</p>
+          <div class="action-stack">
+            <button id="start-guessing-btn" type="button">Start Guessing</button>
+          </div>
+        </section>
+
+        <section class="flow-screen hidden" id="match-choice-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>Match Code</h2>
+          <p class="hint">Use one-time match codes for fair offline play.</p>
+          <div class="action-stack">
+            <button id="create-match-btn" type="button">Create Match Code</button>
+            <button id="join-match-btn" type="button">Join Match</button>
+          </div>
+        </section>
+
+        <section class="flow-screen hidden" id="match-create-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>One-time Match Code</h2>
+          <p class="hint">Send this code to the other player. Use a fresh code each match.</p>
+          <p class="match-code" id="generated-match-code">AA-0000-00</p>
+          <div class="action-stack horizontal tri">
+            <button id="copy-match-code-btn" type="button">Copy</button>
+            <button id="share-match-code-btn" type="button">Share</button>
+            <button id="start-created-match-btn" type="button">Start Match</button>
+          </div>
+        </section>
+
+        <section class="flow-screen hidden" id="match-join-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>Join Match</h2>
+          <p class="hint">Type or paste code; it will auto-format.</p>
+          <label class="sr-only" for="join-match-input">Match code</label>
+          <input id="join-match-input" class="match-input" placeholder="KJ-W6TE-FR" maxlength="11" />
+          <p class="error-message" id="join-error"></p>
+          <div class="action-stack horizontal">
+            <button id="start-joined-match-btn" type="button">Start Match</button>
+          </div>
+        </section>
+
+        <section class="game-screen hidden" id="game-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <div class="secret-panel" id="secret-panel" aria-label="Secret code panel"></div>
+          <section class="rows" id="rows" aria-label="Guess rows"></section>
+          <section class="controls" aria-label="Game controls">
+            <div class="palette" id="palette" role="group" aria-label="Color palette"></div>
+            <div class="action-buttons">
+              <button id="undo-btn" type="button">Undo</button>
+              <button id="clear-btn" type="button">Clear Row</button>
+              <button id="submit-btn" type="button" disabled>Submit Guess</button>
+            </div>
+          </section>
+        </section>
+
+        <section class="stats" aria-live="polite">
+          <button class="stats-toggle" id="stats-toggle" type="button">Stats ▾</button>
+          <div class="stats-body hidden" id="stats-body">
+            <p id="stats-mode">Mode: --</p>
+            <p id="stats-played">Played: 0</p>
+            <p id="stats-wins">Wins: 0</p>
+            <p id="stats-best">Best Score: --</p>
+            <p id="stats-best-time">Best Time: --</p>
+          </div>
+        </section>
+      </section>
+    </main>
+
+    <section
+      class="result-modal hidden"
+      id="result-modal"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="result-title"
+    >
+      <div class="result-card">
+        <h2 id="result-title">Game Over</h2>
+        <p id="result-message"></p>
+        <p id="result-time"></p>
+        <p id="result-match-code" class="hidden"></p>
+        <button id="copy-result-code-btn" type="button" class="hidden">Copy Code</button>
+        <div class="revealed-code" id="revealed-code" aria-label="Revealed secret code"></div>
+        <button id="share-btn" type="button">Share</button>
+        <div id="share-fallback" class="share-fallback hidden">
+          <label class="sr-only" for="share-fallback-text">Share text</label>
+          <textarea id="share-fallback-text" readonly></textarea>
+        </div>
+        <div class="action-stack horizontal">
+          <button id="view-leaderboard-btn" type="button">View Leaderboard</button>
+          <button id="new-game-btn" type="button">New Game</button>
+          <button id="new-match-code-btn" type="button" class="hidden">Generate New Match Code</button>
+        </div>
+      </div>
+    </section>
+
+    <script type="module" src="./script.js"></script>
+  </body>
+</html>
