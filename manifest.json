@@ -1,54 +1,36 @@
-You are working on the existing GitHub Pages PWA game "AA Master Mind".
-Do NOT rewrite the whole project. Make minimal, clean changes and keep the retro travel-board style.
-
-GOAL
-Expand the existing "HOW TO PLAY" screen so it clearly explains ALL modes and key UI actions.
-Keep the text short, readable on mobile, and consistent with the retro style.
-
-REQUIREMENTS
-
-1) Update HOW TO PLAY content (no new modes)
-- Rework the how-to screen text to include these sections (use headings + short bullets):
-  A) Basics
-    - Goal: guess the 4-color code in 6 turns.
-    - Duplicates allowed.
-    - Black peg = correct color + correct position.
-    - White peg = correct color in wrong position.
-    - Time starts when you place the first peg (where applicable).
-  B) Controls
-    - Tap colors to fill the current row.
-    - Tap a placed peg in the current row to remove it.
-    - Undo = removes last peg.
-    - Clear Row = clears the current row.
-    - Submit Guess = checks your row (enabled only when 4 pegs are placed).
-  C) Modes (must mention all)
-    - SOLO: random secret, play anytime, results count in stats.
-    - TWO PLAYERS: Player 1 sets the secret, pass device, Player 2 guesses.
-    - MATCH CODE: both players enter the same code to get the same secret (fair offline race). Use a fresh code each match.
-    - DAILY (Official): same secret for the whole day (UTC). One official try per device per day. Your result can appear on the leaderboard.
-    - DAILY PRACTICE: same daily secret, unlimited practice, does NOT post to leaderboard / does not lock your daily attempt.
-  D) Tips (very short)
-    - Start with 4 different colors to map the code.
-    - Use feedback to narrow positions, not just colors.
-    - Duplicates are possible, so a color can repeat.
-
-- Add a final single-line note:
-  "Daily uses UTC day (not local time)."
-
-2) Layout and styling
-- Keep everything inside the existing howto flow-screen.
-- Make it scannable:
-  - Use small section titles (h3 or styled strong labels)
-  - Short bullet lists
-  - Avoid long paragraphs
-- Ensure it looks good on iPad and small phones (no horizontal scrolling).
-
-3) No functional changes
-- Do not change game logic, modes, timers, or leaderboard.
-- Only update index.html how-to content and minimal CSS if needed.
-
-DELIVERABLE
-Output complete updated contents of:
-1) index.html
-2) style.css (only if you changed it)
-Do NOT output patch/diff.
+{
+  "name": "AA Master Mind",
+  "short_name": "AA MasterMind",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#d4cebf",
+  "theme_color": "#c8c1b2",
+  "description": "Retro travel-board Mastermind with Solo, Two Players, and Match Code modes.",
+  "icons": [
+    {
+      "src": "./icons/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "./icons/icon-192.svg",
+      "sizes": "192x192",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    },
+    {
+      "src": "./icons/icon-512.svg",
+      "sizes": "512x512",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ]
+}
