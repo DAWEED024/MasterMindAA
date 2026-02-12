@@ -1344,9 +1344,11 @@ function renderRevealedCode() {
 
 function finishGame(won) {
   state.gameOver = true;
+
   const attempts = state.currentRow + 1;
   const finalTimeMs = stopTimer();
   state.lastResultTimeMs = finalTimeMs;
+
   updateLifetimeStatsOnFinish({ won, attempts, finalTimeMs });
 
   if (state.mode === MODES.TWO_PLAYERS) {
@@ -1357,17 +1359,21 @@ function finishGame(won) {
   }
 
   if (won) {
-    el.resultMessage.textContent = `${state.winnerText || "Code cracked"} in ${attempts} attempt${attempts > 1 ? "s" : ""}.`;
+    el.resultMessage.textContent =
+      `${state.winnerText || "Code cracked"} in ${attempts} attempt${attempts > 1 ? "s" : ""}.`;
     playSfx("win");
     vibrate([20, 30, 20]);
   } else {
-    el.resultMessage.textContent = `${state.winnerText || "No guesses left"}. Attempts used: ${attempts}.`;
+    el.resultMessage.textContent =
+      `${state.winnerText || "No guesses left"}. Attempts used: ${attempts}.`;
     playSfx("lose");
     vibrate([40]);
   }
 
   const bestTime = state.statsByMode[state.mode]?.bestTimeMs;
-  el.resultTime.textContent = `Final Time: ${formatTime(finalTimeMs)}${bestTime ? ` | Best Time: ${formatTime(bestTime)}` : ""}`;
+  el.resultTime.textContent =
+    `Final Time: ${formatTime(finalTimeMs)}` +
+    (bestTime ? ` | Best Time: ${formatTime(bestTime)}` : "");
 
   if (state.mode === MODES.MATCH_CODE && state.matchCode) {
     el.resultMatchCode.textContent = `Match Code: ${state.matchCode}`;
@@ -1378,47 +1384,41 @@ function finishGame(won) {
     el.copyResultCodeBtn.classList.add("hidden");
   }
 
-  if (!isDailyMode()) {if (!isDailyMode()) {
-  updateStats(state.mode, won, attempts, finalTimeMs);
+  // 🔹 NORMAL MODES
+  if (!isDailyMode()) {
+    updateStats(state.mode, won, attempts, finalTimeMs);
 
-} else if (state.mode === MODES.DAILY && state.isDailyOfficial) {
-  const dailyDate = state.currentDailyDateUTC || getUTCDateStamp();
+  // 🔹 DAILY OFFICIAL
+  } else if (state.mode === MODES.DAILY && state.isDailyOfficial) {
 
-  saveDailyLock({
-    completed: true,
-    won,
-    attempts,
-    timeMs: finalTimeMs,
-    finishedAt: Date.now()
-  }, dailyDate);
+    const dailyDate = state.currentDailyDateUTC || getUTCDateStamp();
 
-  // 🔒 WYSYŁAMY DO RANKINGU TYLKO JEŚLI WYGRANA
-  if (won) {
-    uploadDailyScore({
-      dateUTC: dailyDate,
-      nickname: state.nickname || localStorage.getItem(NICKNAME_KEY) || "Player",
-      deviceId: state.deviceId,
+    saveDailyLock({
+      completed: true,
+      won,
       attempts,
-      timeMs: finalTimeMs
-    }).then(() => {
-      el.subtitle.textContent = "Saved!";
-    }).catch(() => {
-      el.subtitle.textContent = "Score upload failed (offline?)";
-    });
+      timeMs: finalTimeMs,
+      finishedAt: Date.now()
+    }, dailyDate);
+
+    // 🔒 Upload only if won
+    if (won) {
+      uploadDailyScore({
+        dateUTC: dailyDate,
+        nickname: state.nickname || localStorage.getItem(NICKNAME_KEY) || "Player",
+        deviceId: state.deviceId,
+        attempts,
+        timeMs: finalTimeMs
+      }).then(() => {
+        el.subtitle.textContent = "Saved!";
+      }).catch(() => {
+        el.subtitle.textContent = "Score upload failed (offline?)";
+      });
+    }
   }
-}
-      dateUTC: dailyDate,
-      nickname: state.nickname || localStorage.getItem(NICKNAME_KEY) || "Player",
-      deviceId: state.deviceId,
-      attempts,
-      timeMs: finalTimeMs
-    }).then(() => {
-      el.subtitle.textContent = "Saved!";
-    }).catch(() => {
-      el.subtitle.textContent = "Score upload failed (offline?)";
-    });
-  }
+
   renderStatsPanel();
+
   if (!isDailyMode()) {
     revealSecretCode();
     renderRevealedCode();
@@ -1426,6 +1426,7 @@ function finishGame(won) {
   } else {
     el.revealedCode.classList.add("hidden");
   }
+
   el.shareFallback.classList.add("hidden");
   renderBoardState();
   setStatsExpanded(true);
