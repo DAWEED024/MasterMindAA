@@ -15,7 +15,9 @@ const CODE_LENGTH = 4;
 const MODES = {
   SOLO: "solo",
   TWO_PLAYERS: "twoPlayers",
-  MATCH_CODE: "matchCode"
+  MATCH_CODE: "matchCode",
+  DAILY: "daily",
+  DAILY_PRACTICE: "dailyPractice"
 };
 
 const COLORS = [
@@ -31,6 +33,7 @@ const COLOR_INDEX_BY_KEY = Object.fromEntries(COLORS.map((color, index) => [colo
 const STORAGE_KEY = "aaMasterMindStatsByMode";
 const STATS_UI_KEY = "aaMasterMindStatsExpanded";
 const SFX_KEY = "aaMasterMindSfxEnabled";
+const DAILY_LOCK_KEY = "aaMasterMindDailyLock";
 
 const TIMER_KEYS = {
   runStartMs: "runStartMs",
@@ -64,8 +67,12 @@ const el = {
   setupConfirmBtn: document.getElementById("setup-confirm-btn"),
   soloModeBtn: document.getElementById("solo-mode-btn"),
   twoPlayerModeBtn: document.getElementById("two-player-mode-btn"),
+  dailyModeBtn: document.getElementById("daily-mode-btn"),
   matchModeBtn: document.getElementById("match-mode-btn"),
   howToBtn: document.getElementById("how-to-btn"),
+  dailyLockedScreen: document.getElementById("daily-locked-screen"),
+  dailyLockedSummary: document.getElementById("daily-locked-summary"),
+  dailyPracticeBtn: document.getElementById("daily-practice-btn"),
   startGuessingBtn: document.getElementById("start-guessing-btn"),
   createMatchBtn: document.getElementById("create-match-btn"),
   joinMatchBtn: document.getElementById("join-match-btn"),
@@ -91,6 +98,9 @@ const el = {
   resultMatchCode: document.getElementById("result-match-code"),
   revealedCode: document.getElementById("revealed-code"),
   copyResultCodeBtn: document.getElementById("copy-result-code-btn"),
+  shareBtn: document.getElementById("share-btn"),
+  shareFallback: document.getElementById("share-fallback"),
+  shareFallbackText: document.getElementById("share-fallback-text"),
   newGameBtn: document.getElementById("new-game-btn"),
   newMatchCodeBtn: document.getElementById("new-match-code-btn"),
   backButtons: document.querySelectorAll("[data-back-home]")
@@ -113,7 +123,11 @@ let state = {
   sfxEnabled: localStorage.getItem(SFX_KEY) !== "false",
   audioCtx: null,
   audioUnlocked: false,
-  userIsReviewingOldRows: false
+  userPausedAutoScroll: false,
+  autoScrollPauseTimer: null,
+  isDailyOfficial: false,
+  currentDailyDateUTC: "",
+  lastResultTimeMs: 0
 };
 
 function getColorIndex(colorKey) {
@@ -125,6 +139,8 @@ function modeLabel(mode) {
   if (mode === MODES.SOLO) return "Solo";
   if (mode === MODES.TWO_PLAYERS) return "Two Players";
   if (mode === MODES.MATCH_CODE) return "Match Code";
+  if (mode === MODES.DAILY) return "Daily";
+  if (mode === MODES.DAILY_PRACTICE) return "Daily Practice";
   return "--";
 }
 
@@ -184,7 +200,7 @@ function updateStats(mode, won, attempts, finalTimeMs) {
 
 function renderStatsPanel() {
   const mode = state.mode;
-  const stats = mode ? state.statsByMode[mode] : EMPTY_STATS;
+  const stats = mode ? (state.statsByMode[mode] || EMPTY_STATS) : EMPTY_STATS;
   el.statsMode.textContent = `Mode: ${modeLabel(mode)}`;
   el.statsPlayed.textContent = `Played: ${stats.played}`;
   el.statsWins.textContent = `Wins: ${stats.wins}`;
@@ -389,70 +405,156 @@ function playSfx(type) {
   }
 }
 
-function getScrollContainer() {
-  const rowsContainer = el.rows;
-  if (rowsContainer && rowsContainer.scrollHeight > rowsContainer.clientHeight + 1) {
-    return rowsContainer;
-  }
-  return document.scrollingElement || document.documentElement;
-}
-
-function getScrollMetrics(container) {
-  if (container === document.body || container === document.documentElement || container === document.scrollingElement) {
-    const clientHeight = window.innerHeight;
-    const scrollTop = window.pageYOffset || document.documentElement.scrollTop || 0;
-    const scrollHeight = document.documentElement.scrollHeight;
-    return { scrollTop, clientHeight, scrollHeight };
-  }
-  return {
-    scrollTop: container.scrollTop,
-    clientHeight: container.clientHeight,
-    scrollHeight: container.scrollHeight
-  };
-}
-
-function isNearBottom(container) {
-  const { scrollTop, clientHeight, scrollHeight } = getScrollMetrics(container);
-  return (scrollHeight - (scrollTop + clientHeight)) < 120;
-}
-
-function scrollRowsToTop({ force = true } = {}) {
-  const container = getScrollContainer();
-  if (!container) return;
-
-  state.userIsReviewingOldRows = false;
-
-  if (container === document.body || container === document.documentElement || container === document.scrollingElement) {
-    window.scrollTo({ top: 0, behavior: force ? "auto" : "smooth" });
-  } else {
-    container.scrollTo({ top: 0, behavior: force ? "auto" : "smooth" });
+function clearAutoScrollPauseTimer() {
+  if (state.autoScrollPauseTimer) {
+    clearTimeout(state.autoScrollPauseTimer);
+    state.autoScrollPauseTimer = null;
   }
 }
 
-function scrollToCurrentRow({ force = false } = {}) {
-  const rowsContainer = el.rows;
-  const currentRowEl = rowsContainer?.querySelectorAll(".row")[state.currentRow];
-  if (!currentRowEl) {
-    return;
-  }
+function scrollRowsToTop() {
+  if (!el.rows) return;
+  clearAutoScrollPauseTimer();
+  state.userPausedAutoScroll = false;
+  el.rows.scrollTop = 0;
+}
 
-  const container = getScrollContainer();
-  const nearBottom = isNearBottom(container);
-  state.userIsReviewingOldRows = !nearBottom;
+function scrollCurrentRowIntoView({ force = false } = {}) {
+  if (!el.rows) return;
+  if (!force && state.userPausedAutoScroll) return;
 
-  if (!force && state.userIsReviewingOldRows) {
-    return;
-  }
+  const currentRowEl = el.rows.querySelector(".row.current") || el.rows.querySelectorAll(".row")[state.currentRow];
+  if (!currentRowEl) return;
 
   currentRowEl.scrollIntoView({
     behavior: "smooth",
-    block: "nearest"
+    block: "nearest",
+    inline: "nearest"
   });
 }
 
-function updateReviewingStateFromScroll() {
-  const container = getScrollContainer();
-  state.userIsReviewingOldRows = !isNearBottom(container);
+function pauseAutoScrollTemporarily() {
+  state.userPausedAutoScroll = true;
+  clearAutoScrollPauseTimer();
+  state.autoScrollPauseTimer = setTimeout(() => {
+    state.userPausedAutoScroll = false;
+    state.autoScrollPauseTimer = null;
+  }, 2000);
+}
+
+function getUTCDateStamp() {
+  return new Date().toISOString().slice(0, 10);
+}
+
+function getDailySecretCode(dateUTC = getUTCDateStamp()) {
+  const seed = fnv1a32(`AA|DAILY|${dateUTC}`);
+  const rand = mulberry32(seed);
+  return Array.from({ length: CODE_LENGTH }, () => COLORS[Math.floor(rand() * COLORS.length)].key);
+}
+
+function readDailyLock() {
+  try {
+    const raw = localStorage.getItem(DAILY_LOCK_KEY);
+    return raw ? JSON.parse(raw) : {};
+  } catch {
+    return {};
+  }
+}
+
+function getTodayDailyLock(dateUTC = getUTCDateStamp()) {
+  const locks = readDailyLock();
+  return locks[dateUTC] || null;
+}
+
+function saveDailyLock(payload, dateUTC = getUTCDateStamp()) {
+  const locks = readDailyLock();
+  locks[dateUTC] = payload;
+  localStorage.setItem(DAILY_LOCK_KEY, JSON.stringify(locks));
+}
+
+function openDailyLockedScreen(lock, dateUTC = getUTCDateStamp()) {
+  hideAllScreens();
+  el.dailyLockedScreen.classList.remove("hidden");
+  const result = lock.won ? `${lock.attempts}/6` : "FAIL";
+  const timeLabel = Number.isFinite(lock.timeMs) ? formatTime(lock.timeMs) : "--:--.-";
+  el.dailyLockedSummary.textContent = `Result: ${result} | Time: ${timeLabel} | ${dateUTC}`;
+  el.subtitle.textContent = "Daily already played today.";
+  setStatsExpanded(false);
+}
+
+function beginDailyMode({ practice = false } = {}) {
+  if (!confirmAbandonIfNeeded()) return;
+
+  const dateUTC = getUTCDateStamp();
+  const lock = getTodayDailyLock(dateUTC);
+  if (!practice && lock?.completed) {
+    state.mode = MODES.DAILY;
+    state.isDailyOfficial = true;
+    state.currentDailyDateUTC = dateUTC;
+    openDailyLockedScreen(lock, dateUTC);
+    return;
+  }
+
+  resetTimer(practice ? MODES.DAILY_PRACTICE : MODES.DAILY);
+  state.mode = practice ? MODES.DAILY_PRACTICE : MODES.DAILY;
+  state.isDailyOfficial = !practice;
+  state.currentDailyDateUTC = dateUTC;
+  state.secretCode = getDailySecretCode(dateUTC);
+  prepareGuessBoard();
+  el.subtitle.textContent = practice ? "Daily Practice: same code, no score lock." : `Daily: one official try (${dateUTC} UTC).`;
+  setStatsExpanded(false);
+}
+
+function isDailyMode() {
+  return state.mode === MODES.DAILY || state.mode === MODES.DAILY_PRACTICE;
+}
+
+function buildShareText() {
+  const playedRows = state.feedback.filter((row) => row.length > 0);
+  const won = state.feedback.some((row) => row.filter((c) => c === "black").length === CODE_LENGTH);
+  const resultLine = won ? `${state.currentRow + 1}/6` : "FAIL";
+  const lines = [
+    "AA Master Mind",
+    `Mode: ${modeLabel(state.mode)}`,
+    `Result: ${resultLine}`,
+    `Time: ${formatTime(state.lastResultTimeMs || getElapsedMs())}`
+  ];
+
+  if (isDailyMode() && state.currentDailyDateUTC) {
+    lines.push(`Date: ${state.currentDailyDateUTC}`);
+  }
+
+  if (state.mode === MODES.MATCH_CODE && state.matchCode) {
+    lines.push(`Match Code: ${state.matchCode}`);
+  }
+
+  for (const row of playedRows) {
+    const blacks = row.filter((c) => c === "black").length;
+    const whites = row.filter((c) => c === "white").length;
+    const empties = CODE_LENGTH - blacks - whites;
+    lines.push(`${"🟥".repeat(blacks)}${"🟨".repeat(whites)}${"⬛".repeat(Math.max(0, empties))}`);
+  }
+
+  return lines.join("\n");
+}
+
+async function shareResults() {
+  const text = buildShareText();
+  try {
+    await navigator.clipboard.writeText(text);
+    el.shareBtn.textContent = "Copied!";
+    setTimeout(() => {
+      el.shareBtn.textContent = "Share";
+    }, 900);
+    el.subtitle.textContent = "Results copied to clipboard.";
+    el.shareFallback.classList.add("hidden");
+  } catch {
+    el.shareFallbackText.value = text;
+    el.shareFallback.classList.remove("hidden");
+    el.shareFallbackText.focus();
+    el.shareFallbackText.select();
+    el.subtitle.textContent = "Clipboard unavailable. Copy text below.";
+  }
 }
 
 /* ---------- MATCH CODE HELPERS ---------- */
@@ -513,6 +615,7 @@ function hideAllScreens() {
   [
     el.startScreen,
     el.howToScreen,
+    el.dailyLockedScreen,
     el.twoPlayerSet,
     el.twoPlayerPass,
     el.matchChoice,
@@ -525,11 +628,13 @@ function hideAllScreens() {
 function abandonRunAndReturnHome() {
   stopTimer();
   resetTimer();
-  scrollRowsToTop({ force: true });
+  scrollRowsToTop();
   state.mode = null;
   state.gameOver = false;
   state.matchCode = "";
   state.setupCode = [];
+  state.isDailyOfficial = false;
+  state.currentDailyDateUTC = "";
   state.guesses = Array.from({ length: TOTAL_ROWS }, () => []);
   state.feedback = Array.from({ length: TOTAL_ROWS }, () => []);
   hideAllScreens();
@@ -542,7 +647,7 @@ function abandonRunAndReturnHome() {
 
 function goToStartScreen() {
   resetTimer();
-  scrollRowsToTop({ force: true });
+  scrollRowsToTop();
   abandonRunAndReturnHome();
 }
 
@@ -618,7 +723,7 @@ function showGameScreen() {
   renderStatsPanel();
   setStatsExpanded(false);
   setupScrollTracking();
-  scrollToCurrentRow({ force: true });
+  scrollCurrentRowIntoView({ force: true });
 }
 
 /* ---------- Board ---------- */
@@ -646,7 +751,7 @@ function animatePegPop(pegEl) {
 }
 
 function prepareGuessBoard() {
-  scrollRowsToTop({ force: true });
+  scrollRowsToTop();
   state.guesses = Array.from({ length: TOTAL_ROWS }, () => []);
   state.feedback = Array.from({ length: TOTAL_ROWS }, () => []);
   state.currentRow = 0;
@@ -657,7 +762,7 @@ function prepareGuessBoard() {
   buildPalette(el.palette, addColorToCurrentRow);
   renderBoardState();
   showGameScreen();
-  scrollToCurrentRow({ force: true });
+  scrollCurrentRowIntoView({ force: true });
 }
 
 function buildSecretPanel() {
@@ -759,16 +864,16 @@ function addColorToCurrentRow(colorKey) {
   const guess = state.guesses[state.currentRow];
   if (guess.length >= CODE_LENGTH) return;
 
-  // SOLO timing starts on first peg placement by player action.
-  if (state.mode === MODES.SOLO && !state.timer.isRunning && state.timer.elapsedMs === 0) {
-    startTimer(MODES.SOLO);
+  // SOLO + DAILY timing starts on first peg placement by player action.
+  if ((state.mode === MODES.SOLO || isDailyMode()) && !state.timer.isRunning && state.timer.elapsedMs === 0) {
+    startTimer(state.mode);
   }
 
   guess.push(colorKey);
   playSfx("place");
   vibrate(10);
   renderBoardState();
-  scrollToCurrentRow();
+  scrollCurrentRowIntoView();
 
   const rowEl = el.rows.querySelectorAll(".row")[state.currentRow];
   const pegEls = rowEl?.querySelectorAll(".slot .peg");
@@ -858,7 +963,7 @@ function submitGuess() {
 
   state.currentRow += 1;
   renderBoardState();
-  scrollToCurrentRow();
+  scrollCurrentRowIntoView();
 }
 
 function renderBoardState() {
@@ -926,6 +1031,7 @@ function finishGame(won) {
   state.gameOver = true;
   const attempts = state.currentRow + 1;
   const finalTimeMs = stopTimer();
+  state.lastResultTimeMs = finalTimeMs;
 
   if (state.mode === MODES.TWO_PLAYERS) {
     state.winnerText = won ? "Player 2 wins" : "Player 1 wins";
@@ -956,10 +1062,26 @@ function finishGame(won) {
     el.copyResultCodeBtn.classList.add("hidden");
   }
 
-  updateStats(state.mode, won, attempts, finalTimeMs);
+  if (!isDailyMode()) {
+    updateStats(state.mode, won, attempts, finalTimeMs);
+  } else if (state.mode === MODES.DAILY && state.isDailyOfficial) {
+    saveDailyLock({
+      completed: true,
+      won,
+      attempts,
+      timeMs: finalTimeMs,
+      finishedAt: Date.now()
+    }, state.currentDailyDateUTC || getUTCDateStamp());
+  }
   renderStatsPanel();
-  revealSecretCode();
-  renderRevealedCode();
+  if (!isDailyMode()) {
+    revealSecretCode();
+    renderRevealedCode();
+    el.revealedCode.classList.remove("hidden");
+  } else {
+    el.revealedCode.classList.add("hidden");
+  }
+  el.shareFallback.classList.add("hidden");
   renderBoardState();
   setStatsExpanded(true);
   el.modal.classList.remove("hidden");
@@ -968,6 +1090,7 @@ function finishGame(won) {
 /* ---------- Events ---------- */
 
 el.soloModeBtn.addEventListener("click", beginSoloMode);
+el.dailyModeBtn.addEventListener("click", () => beginDailyMode({ practice: false }));
 el.twoPlayerModeBtn.addEventListener("click", beginTwoPlayerSetup);
 el.matchModeBtn.addEventListener("click", showMatchChoice);
 el.howToBtn.addEventListener("click", showHowTo);
@@ -1029,6 +1152,11 @@ el.shareMatchCodeBtn.addEventListener("click", async () => {
   el.copyMatchCodeBtn.click();
 });
 
+
+el.dailyPracticeBtn.addEventListener("click", () => {
+  beginDailyMode({ practice: true });
+});
+
 el.joinInput.addEventListener("input", () => {
   const formatted = formatMatchCodeForInput(el.joinInput.value);
   el.joinInput.value = formatted;
@@ -1069,6 +1197,11 @@ el.newMatchCodeBtn.addEventListener("click", () => {
   showMatchCreate();
 });
 
+
+el.shareBtn.addEventListener("click", () => {
+  shareResults();
+});
+
 el.copyResultCodeBtn.addEventListener("click", async () => {
   if (!state.matchCode) return;
   try {
@@ -1084,15 +1217,9 @@ el.copyResultCodeBtn.addEventListener("click", async () => {
 });
 
 function setupScrollTracking() {
-  const container = getScrollContainer();
-  if (!container) return;
-
-  const target = (container === document.body || container === document.documentElement || container === document.scrollingElement)
-    ? window
-    : container;
-
-  target.removeEventListener("scroll", updateReviewingStateFromScroll);
-  target.addEventListener("scroll", updateReviewingStateFromScroll, { passive: true });
+  if (!el.rows) return;
+  el.rows.removeEventListener("scroll", pauseAutoScrollTemporarily);
+  el.rows.addEventListener("scroll", pauseAutoScrollTemporarily, { passive: true });
 }
 
 function registerServiceWorker() {
@@ -1115,7 +1242,7 @@ function init() {
   setStatsExpanded(false);
   updateSfxToggleLabel();
   setupScrollTracking();
-  scrollRowsToTop({ force: true });
+  scrollRowsToTop();
   ["touchstart", "mousedown", "keydown"].forEach((evt) =>
     document.addEventListener(evt, unlockAudio, { passive: true })
   );
