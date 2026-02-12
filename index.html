@@ -32,6 +32,7 @@
           <h2>Choose Mode</h2>
           <div class="action-stack">
             <button id="solo-mode-btn" type="button">SOLO</button>
+            <button id="daily-mode-btn" type="button">DAILY</button>
             <button id="two-player-mode-btn" type="button">TWO PLAYERS</button>
             <button id="match-mode-btn" type="button">MATCH CODE</button>
             <button id="how-to-btn" type="button">HOW TO PLAY</button>
@@ -45,6 +46,15 @@
           <p class="hint">Duplicates are allowed.</p>
           <p class="hint">Black peg = correct color + correct position.</p>
           <p class="hint">White peg = correct color in wrong position.</p>
+        </section>
+
+        <section class="flow-screen hidden" id="daily-locked-screen">
+          <button class="back-btn" data-back-home type="button">← Back</button>
+          <h2>Daily already played today.</h2>
+          <p class="hint" id="daily-locked-summary"></p>
+          <div class="action-stack">
+            <button id="daily-practice-btn" type="button">Practice Daily (no score)</button>
+          </div>
         </section>
 
         <section class="flow-screen hidden" id="two-player-set-screen">
@@ -143,6 +153,11 @@
         <p id="result-match-code" class="hidden"></p>
         <button id="copy-result-code-btn" type="button" class="hidden">Copy Code</button>
         <div class="revealed-code" id="revealed-code" aria-label="Revealed secret code"></div>
+        <button id="share-btn" type="button">Share</button>
+        <div id="share-fallback" class="share-fallback hidden">
+          <label class="sr-only" for="share-fallback-text">Share text</label>
+          <textarea id="share-fallback-text" readonly></textarea>
+        </div>
         <div class="action-stack horizontal">
           <button id="new-game-btn" type="button">New Game</button>
           <button id="new-match-code-btn" type="button" class="hidden">Generate New Match Code</button>
