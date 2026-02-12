@@ -1,3 +1,6 @@
+import { initializeApp } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-app.js";
+import { getFirestore, doc, setDoc, getDocs, collection, query, where, orderBy, limit } from "https://www.gstatic.com/firebasejs/12.9.0/firebase-firestore.js";
+
 document.addEventListener("gesturestart", (e) => e.preventDefault());
 document.addEventListener("gesturechange", (e) => e.preventDefault());
 document.addEventListener("gestureend", (e) => e.preventDefault());
@@ -34,6 +37,22 @@ const STORAGE_KEY = "aaMasterMindStatsByMode";
 const STATS_UI_KEY = "aaMasterMindStatsExpanded";
 const SFX_KEY = "aaMasterMindSfxEnabled";
 const DAILY_LOCK_KEY = "aaMasterMindDailyLock";
+const DEVICE_ID_KEY = "aaMasterMindDeviceId";
+const NICKNAME_KEY = "aaMasterMindNickname";
+const LIFETIME_KEY = "aaMasterMindLifetimeStats";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyAxVbM7yL0ca2bsSDmhXwe1PB7vT4W5qYg",
+  authDomain: "aa-mastermind.firebaseapp.com",
+  projectId: "aa-mastermind",
+  storageBucket: "aa-mastermind.firebasestorage.app",
+  messagingSenderId: "489282566191",
+  appId: "1:489282566191:web:b3a1d4745c601ec34baeda",
+  measurementId: "G-2FT4Q2PZWK"
+};
+
+const firebaseApp = initializeApp(firebaseConfig);
+const db = getFirestore(firebaseApp);
 
 const TIMER_KEYS = {
   runStartMs: "runStartMs",
@@ -68,11 +87,38 @@ const el = {
   soloModeBtn: document.getElementById("solo-mode-btn"),
   twoPlayerModeBtn: document.getElementById("two-player-mode-btn"),
   dailyModeBtn: document.getElementById("daily-mode-btn"),
+  leaderboardBtn: document.getElementById("leaderboard-btn"),
   matchModeBtn: document.getElementById("match-mode-btn"),
   howToBtn: document.getElementById("how-to-btn"),
+  lifetimeBtn: document.getElementById("lifetime-btn"),
+  lifetimeScreen: document.getElementById("lifetime-screen"),
+  lifetimeResetBtn: document.getElementById("lifetime-reset-btn"),
+  lifePlayed: document.getElementById("life-played"),
+  lifeWins: document.getElementById("life-wins"),
+  lifeRate: document.getElementById("life-rate"),
+  lifeBestAttempts: document.getElementById("life-best-attempts"),
+  lifeBestTime: document.getElementById("life-best-time"),
+  lifeAvgAttempts: document.getElementById("life-avg-attempts"),
+  lifeAvgTime: document.getElementById("life-avg-time"),
+  dailyScreen: document.getElementById("daily-screen"),
+  dailyNicknameInput: document.getElementById("daily-nickname-input"),
+  dailyNicknameError: document.getElementById("daily-nickname-error"),
+  dailyStartBtn: document.getElementById("daily-start-btn"),
+  leaderboardScreen: document.getElementById("leaderboard-screen"),
+  leaderboardDate: document.getElementById("leaderboard-date"),
+  leaderboardRefreshBtn: document.getElementById("leaderboard-refresh-btn"),
+  lbTodayBtn: document.getElementById("lb-today-btn"),
+  lbYesterdayBtn: document.getElementById("lb-yesterday-btn"),
+  leaderboardUpdated: document.getElementById("leaderboard-updated"),
+  leaderboardYourRank: document.getElementById("leaderboard-your-rank"),
+  leaderboardPodium: document.getElementById("leaderboard-podium"),
+  leaderboardSkeleton: document.getElementById("leaderboard-skeleton"),
+  leaderboardStatus: document.getElementById("leaderboard-status"),
+  leaderboardList: document.getElementById("leaderboard-list"),
   dailyLockedScreen: document.getElementById("daily-locked-screen"),
   dailyLockedSummary: document.getElementById("daily-locked-summary"),
   dailyPracticeBtn: document.getElementById("daily-practice-btn"),
+  dailyLockedPracticeBtn: document.getElementById("daily-locked-practice-btn"),
   startGuessingBtn: document.getElementById("start-guessing-btn"),
   createMatchBtn: document.getElementById("create-match-btn"),
   joinMatchBtn: document.getElementById("join-match-btn"),
@@ -101,6 +147,7 @@ const el = {
   shareBtn: document.getElementById("share-btn"),
   shareFallback: document.getElementById("share-fallback"),
   shareFallbackText: document.getElementById("share-fallback-text"),
+  viewLeaderboardBtn: document.getElementById("view-leaderboard-btn"),
   newGameBtn: document.getElementById("new-game-btn"),
   newMatchCodeBtn: document.getElementById("new-match-code-btn"),
   backButtons: document.querySelectorAll("[data-back-home]")
@@ -127,7 +174,10 @@ let state = {
   autoScrollPauseTimer: null,
   isDailyOfficial: false,
   currentDailyDateUTC: "",
-  lastResultTimeMs: 0
+  lastResultTimeMs: 0,
+  deviceId: "",
+  nickname: "",
+  leaderboardDateOffsetDays: 0
 };
 
 function getColorIndex(colorKey) {
@@ -442,6 +492,237 @@ function pauseAutoScrollTemporarily() {
   }, 2000);
 }
 
+function getOrCreateDeviceId() {
+  const existing = localStorage.getItem(DEVICE_ID_KEY);
+  if (existing && existing.length >= 10 && existing.length <= 40) {
+    return existing;
+  }
+  const length = 20;
+  let generated = "";
+  while (generated.length < length) {
+    generated += Math.random().toString(36).slice(2);
+  }
+  generated = generated.slice(0, length);
+  localStorage.setItem(DEVICE_ID_KEY, generated);
+  return generated;
+}
+
+function sanitizeNickname(raw) {
+  return String(raw || "").trim().replace(/\s+/g, " ").replace(/[^a-zA-Z0-9 _.-]/g, "").slice(0, 12);
+}
+
+function validateNickname(raw) {
+  const clean = sanitizeNickname(raw);
+  if (clean.length < 2 || clean.length > 12) {
+    return { ok: false, clean, message: "Nickname must be 2-12 chars." };
+  }
+  return { ok: true, clean, message: "" };
+}
+
+function updateDailyNicknameUi() {
+  const { ok, clean, message } = validateNickname(el.dailyNicknameInput.value);
+  el.dailyNicknameError.textContent = message;
+  el.dailyStartBtn.disabled = !ok;
+  if (ok) {
+    state.nickname = clean;
+    localStorage.setItem(NICKNAME_KEY, clean);
+  }
+}
+
+function dailyDocId(dateUTC, mode, deviceId) {
+  return `${dateUTC}_${mode}_${deviceId}`;
+}
+
+async function uploadDailyScore({ dateUTC, nickname, deviceId, attempts, timeMs }) {
+  const mode = "daily";
+  const docId = dailyDocId(dateUTC, mode, deviceId);
+  await setDoc(doc(db, "leaderboards", docId), {
+    dateUTC,
+    mode,
+    nickname,
+    deviceId,
+    timeMs: Math.floor(timeMs),
+    attempts,
+    createdAt: Date.now()
+  });
+}
+
+function renderLeaderboardRows(rows) {
+  el.leaderboardList.innerHTML = "";
+  renderPodium(rows);
+
+  const yourIndex = rows.findIndex((row) => row.deviceId === state.deviceId);
+  el.leaderboardYourRank.textContent = yourIndex >= 0 ? `Your rank: #${yourIndex + 1}` : "No entry yet today.";
+
+  if (!rows.length) {
+    el.leaderboardStatus.textContent = "No scores yet. Be the first today.";
+    return;
+  }
+
+  el.leaderboardStatus.textContent = "";
+  rows.forEach((row, index) => {
+    const item = document.createElement("p");
+    item.className = `leaderboard-row hint${row.deviceId === state.deviceId ? " you-row" : ""}`;
+    item.style.animationDelay = `${Math.min(index, 10) * 22}ms`;
+    item.textContent = `${index + 1}. ${row.nickname}${row.deviceId === state.deviceId ? " (YOU)" : ""}  ${row.attempts}/6  ${formatTime(row.timeMs)}`;
+    el.leaderboardList.appendChild(item);
+  });
+}
+
+async function loadLeaderboardForToday() {
+  const dateUTC = getUTCDateStampWithOffset(state.leaderboardDateOffsetDays);
+  el.leaderboardDate.textContent = `UTC Date: ${dateUTC}`;
+  el.leaderboardStatus.textContent = "Loading leaderboard…";
+  el.leaderboardSkeleton.classList.remove("hidden");
+  el.leaderboardList.innerHTML = "";
+  el.leaderboardPodium.innerHTML = "";
+  el.leaderboardYourRank.textContent = "";
+  try {
+    const q = query(
+      collection(db, "leaderboards"),
+      where("dateUTC", "==", dateUTC),
+      where("mode", "==", "daily"),
+      orderBy("attempts", "asc"),
+      orderBy("timeMs", "asc"),
+      orderBy("createdAt", "asc"),
+      limit(20)
+    );
+    const snap = await getDocs(q);
+    const rows = snap.docs.map((d) => {
+      const v = d.data();
+      return {
+        nickname: v.nickname || "Player",
+        deviceId: v.deviceId || "",
+        attempts: Math.min(6, Math.max(1, Number(v.attempts) || 6)),
+        timeMs: Math.max(0, Number(v.timeMs) || 0),
+        createdAt: Math.max(0, Number(v.createdAt) || 0)
+      };
+    });
+    rows.sort((a, b) => (a.attempts - b.attempts) || (a.timeMs - b.timeMs) || (a.createdAt - b.createdAt));
+    renderLeaderboardRows(rows);
+    el.leaderboardUpdated.textContent = `Updated: ${formatUtcClock()} UTC`;
+  } catch {
+    el.leaderboardStatus.textContent = "Leaderboard offline. Check connection and try Refresh.";
+  } finally {
+    el.leaderboardSkeleton.classList.add("hidden");
+  }
+}
+
+function showLeaderboardScreen() {
+  if (!confirmAbandonIfNeeded()) return;
+  hideAllScreens();
+  state.leaderboardDateOffsetDays = 0;
+  el.lbTodayBtn.disabled = true;
+  el.lbYesterdayBtn.disabled = false;
+  el.leaderboardScreen.classList.remove("hidden");
+  el.subtitle.textContent = "Daily leaderboard (UTC).";
+  setStatsExpanded(false);
+  loadLeaderboardForToday();
+}
+
+function showDailyScreen() {
+  if (!confirmAbandonIfNeeded()) return;
+  hideAllScreens();
+  el.dailyScreen.classList.remove("hidden");
+  const savedName = localStorage.getItem(NICKNAME_KEY) || "";
+  el.dailyNicknameInput.value = savedName;
+  el.dailyNicknameError.textContent = "";
+  updateDailyNicknameUi();
+  el.subtitle.textContent = "Enter nickname for official daily run.";
+  setStatsExpanded(false);
+}
+
+function getUTCDateStampWithOffset(offsetDays = 0) {
+  const now = new Date();
+  const utcMs = Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + offsetDays);
+  return new Date(utcMs).toISOString().slice(0, 10);
+}
+
+function loadLifetimeStats() {
+  try {
+    const raw = localStorage.getItem(LIFETIME_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return {
+      playedTotal: Number(parsed.playedTotal) || 0,
+      winsTotal: Number(parsed.winsTotal) || 0,
+      bestTimeMs: Number.isFinite(parsed.bestTimeMs) ? parsed.bestTimeMs : null,
+      bestAttempts: Number.isFinite(parsed.bestAttempts) ? parsed.bestAttempts : null,
+      sumAttemptsWin: Number(parsed.sumAttemptsWin) || 0,
+      sumTimeWinMs: Number(parsed.sumTimeWinMs) || 0
+    };
+  } catch {
+    return { playedTotal: 0, winsTotal: 0, bestTimeMs: null, bestAttempts: null, sumAttemptsWin: 0, sumTimeWinMs: 0 };
+  }
+}
+
+function saveLifetimeStats(stats) {
+  localStorage.setItem(LIFETIME_KEY, JSON.stringify(stats));
+}
+
+function computeLifetimeView(stats) {
+  const winRate = stats.playedTotal ? Math.round((stats.winsTotal / stats.playedTotal) * 100) : null;
+  const avgAttemptsWin = stats.winsTotal ? (stats.sumAttemptsWin / stats.winsTotal) : null;
+  const avgTimeWinMs = stats.winsTotal ? (stats.sumTimeWinMs / stats.winsTotal) : null;
+  return { winRate, avgAttemptsWin, avgTimeWinMs };
+}
+
+function renderLifetimeStatsScreen() {
+  const stats = loadLifetimeStats();
+  const view = computeLifetimeView(stats);
+  el.lifePlayed.textContent = `Played: ${stats.playedTotal}`;
+  el.lifeWins.textContent = `Wins: ${stats.winsTotal}`;
+  el.lifeRate.textContent = `Win Rate: ${view.winRate === null ? "--" : `${view.winRate}%`}`;
+  el.lifeBestAttempts.textContent = `Best Attempts: ${stats.bestAttempts ?? "--"}`;
+  el.lifeBestTime.textContent = `Best Time: ${stats.bestTimeMs ? formatTime(stats.bestTimeMs) : "--"}`;
+  el.lifeAvgAttempts.textContent = `Avg Attempts (wins): ${view.avgAttemptsWin ? view.avgAttemptsWin.toFixed(2) : "--"}`;
+  el.lifeAvgTime.textContent = `Avg Time (wins): ${view.avgTimeWinMs ? formatTime(view.avgTimeWinMs) : "--"}`;
+}
+
+function showLifetimeScreen() {
+  if (!confirmAbandonIfNeeded()) return;
+  hideAllScreens();
+  el.lifetimeScreen.classList.remove("hidden");
+  el.subtitle.textContent = "Lifetime stats (official modes + Daily official).";
+  setStatsExpanded(false);
+  renderLifetimeStatsScreen();
+}
+
+function updateLifetimeStatsOnFinish({ won, attempts, finalTimeMs }) {
+  if (state.mode === MODES.DAILY_PRACTICE) return;
+  const stats = loadLifetimeStats();
+  stats.playedTotal += 1;
+  if (won) {
+    stats.winsTotal += 1;
+    stats.sumAttemptsWin += attempts;
+    stats.sumTimeWinMs += finalTimeMs;
+    if (!stats.bestAttempts || attempts < stats.bestAttempts) {
+      stats.bestAttempts = attempts;
+    }
+    if (!stats.bestTimeMs || finalTimeMs < stats.bestTimeMs) {
+      stats.bestTimeMs = finalTimeMs;
+    }
+  }
+  saveLifetimeStats(stats);
+}
+
+function renderPodium(entries) {
+  el.leaderboardPodium.innerHTML = "";
+  const medals = ["🥇", "🥈", "🥉"];
+  entries.slice(0, 3).forEach((row, idx) => {
+    const card = document.createElement("article");
+    card.className = "podium-card";
+    card.style.animationDelay = `${idx * 40}ms`;
+    card.innerHTML = `<p class="podium-rank">${medals[idx]} #${idx + 1}</p><p class="hint">${row.nickname}</p><p class="hint">${row.attempts}/6</p><p class="hint">${formatTime(row.timeMs)}</p>`;
+    el.leaderboardPodium.appendChild(card);
+  });
+}
+
+function formatUtcClock(date = new Date()) {
+  const hh = String(date.getUTCHours()).padStart(2, "0");
+  const mm = String(date.getUTCMinutes()).padStart(2, "0");
+  return `${hh}:${mm}`;
+}
+
 function getUTCDateStamp() {
   return new Date().toISOString().slice(0, 10);
 }
@@ -483,8 +764,6 @@ function openDailyLockedScreen(lock, dateUTC = getUTCDateStamp()) {
 }
 
 function beginDailyMode({ practice = false } = {}) {
-  if (!confirmAbandonIfNeeded()) return;
-
   const dateUTC = getUTCDateStamp();
   const lock = getTodayDailyLock(dateUTC);
   if (!practice && lock?.completed) {
@@ -493,6 +772,17 @@ function beginDailyMode({ practice = false } = {}) {
     state.currentDailyDateUTC = dateUTC;
     openDailyLockedScreen(lock, dateUTC);
     return;
+  }
+
+  if (!practice) {
+    const { ok, clean, message } = validateNickname(el.dailyNicknameInput.value);
+    if (!ok) {
+      el.dailyNicknameError.textContent = message;
+      el.dailyStartBtn.disabled = true;
+      return;
+    }
+    state.nickname = clean;
+    localStorage.setItem(NICKNAME_KEY, clean);
   }
 
   resetTimer(practice ? MODES.DAILY_PRACTICE : MODES.DAILY);
@@ -615,6 +905,9 @@ function hideAllScreens() {
   [
     el.startScreen,
     el.howToScreen,
+    el.lifetimeScreen,
+    el.dailyScreen,
+    el.leaderboardScreen,
     el.dailyLockedScreen,
     el.twoPlayerSet,
     el.twoPlayerPass,
@@ -1032,6 +1325,7 @@ function finishGame(won) {
   const attempts = state.currentRow + 1;
   const finalTimeMs = stopTimer();
   state.lastResultTimeMs = finalTimeMs;
+  updateLifetimeStatsOnFinish({ won, attempts, finalTimeMs });
 
   if (state.mode === MODES.TWO_PLAYERS) {
     state.winnerText = won ? "Player 2 wins" : "Player 1 wins";
@@ -1065,13 +1359,26 @@ function finishGame(won) {
   if (!isDailyMode()) {
     updateStats(state.mode, won, attempts, finalTimeMs);
   } else if (state.mode === MODES.DAILY && state.isDailyOfficial) {
+    const dailyDate = state.currentDailyDateUTC || getUTCDateStamp();
     saveDailyLock({
       completed: true,
       won,
       attempts,
       timeMs: finalTimeMs,
       finishedAt: Date.now()
-    }, state.currentDailyDateUTC || getUTCDateStamp());
+    }, dailyDate);
+
+    uploadDailyScore({
+      dateUTC: dailyDate,
+      nickname: state.nickname || localStorage.getItem(NICKNAME_KEY) || "Player",
+      deviceId: state.deviceId,
+      attempts,
+      timeMs: finalTimeMs
+    }).then(() => {
+      el.subtitle.textContent = "Saved!";
+    }).catch(() => {
+      el.subtitle.textContent = "Score upload failed (offline?)";
+    });
   }
   renderStatsPanel();
   if (!isDailyMode()) {
@@ -1090,10 +1397,12 @@ function finishGame(won) {
 /* ---------- Events ---------- */
 
 el.soloModeBtn.addEventListener("click", beginSoloMode);
-el.dailyModeBtn.addEventListener("click", () => beginDailyMode({ practice: false }));
+el.dailyModeBtn.addEventListener("click", showDailyScreen);
+el.leaderboardBtn.addEventListener("click", showLeaderboardScreen);
 el.twoPlayerModeBtn.addEventListener("click", beginTwoPlayerSetup);
 el.matchModeBtn.addEventListener("click", showMatchChoice);
 el.howToBtn.addEventListener("click", showHowTo);
+el.lifetimeBtn.addEventListener("click", showLifetimeScreen);
 el.createMatchBtn.addEventListener("click", showMatchCreate);
 el.joinMatchBtn.addEventListener("click", showMatchJoin);
 
@@ -1153,9 +1462,51 @@ el.shareMatchCodeBtn.addEventListener("click", async () => {
 });
 
 
+el.dailyStartBtn.addEventListener("click", () => {
+  beginDailyMode({ practice: false });
+});
+
 el.dailyPracticeBtn.addEventListener("click", () => {
   beginDailyMode({ practice: true });
 });
+
+el.dailyLockedPracticeBtn.addEventListener("click", () => {
+  beginDailyMode({ practice: true });
+});
+
+el.dailyNicknameInput.addEventListener("input", () => {
+  updateDailyNicknameUi();
+});
+
+el.leaderboardRefreshBtn.addEventListener("click", () => {
+  loadLeaderboardForToday();
+});
+
+el.lbTodayBtn.addEventListener("click", () => {
+  state.leaderboardDateOffsetDays = 0;
+  el.lbTodayBtn.disabled = true;
+  el.lbYesterdayBtn.disabled = false;
+  loadLeaderboardForToday();
+});
+
+el.lbYesterdayBtn.addEventListener("click", () => {
+  state.leaderboardDateOffsetDays = -1;
+  el.lbTodayBtn.disabled = false;
+  el.lbYesterdayBtn.disabled = true;
+  loadLeaderboardForToday();
+});
+
+el.viewLeaderboardBtn.addEventListener("click", () => {
+  el.modal.classList.add("hidden");
+  showLeaderboardScreen();
+});
+
+el.lifetimeResetBtn.addEventListener("click", () => {
+  if (!window.confirm("Reset lifetime stats?")) return;
+  localStorage.removeItem(LIFETIME_KEY);
+  renderLifetimeStatsScreen();
+});
+
 
 el.joinInput.addEventListener("input", () => {
   const formatted = formatMatchCodeForInput(el.joinInput.value);
@@ -1240,6 +1591,8 @@ function init() {
   el.subtitle.textContent = "Select a mode to begin.";
   renderStatsPanel();
   setStatsExpanded(false);
+  state.deviceId = getOrCreateDeviceId();
+  state.nickname = sanitizeNickname(localStorage.getItem(NICKNAME_KEY) || "");
   updateSfxToggleLabel();
   setupScrollTracking();
   scrollRowsToTop();
