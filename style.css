@@ -30,6 +30,7 @@ body {
 
 body {
   min-height: 100dvh;
+  touch-action: manipulation;
   font-family: "Press Start 2P", monospace;
   font-size: var(--font-base);
   color: var(--text);
@@ -40,13 +41,14 @@ body {
 
 .app-shell {
   height: 100dvh;
+  overflow: hidden;
   display: grid;
   place-items: center;
   padding: var(--pad);
 }
 
 .board {
-  touch-action: manipulation;
+  touch-action: none;
   width: min(92vw, 1100px);
   height: min(100dvh, 920px);
   overflow: hidden;
@@ -152,6 +154,13 @@ h2 {
   -webkit-touch-callout: none;
 }
 
+.match-input,
+textarea {
+  -webkit-user-select: text;
+  user-select: text;
+  -webkit-touch-callout: default;
+}
+
 button,
 .slot,
 .palette-color {
@@ -252,6 +261,8 @@ button:disabled {
   min-height: 0;
   overflow: auto;
   -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  touch-action: pan-y;
   padding-right: 2px;
 }
 
@@ -444,6 +455,28 @@ button:disabled {
   grid-template-columns: repeat(4, minmax(var(--hole-size), 56px));
   justify-content: center;
   gap: var(--gap);
+}
+
+
+.share-fallback {
+  margin: 0.6rem 0;
+}
+
+#share-btn {
+  margin: 0.3rem auto 0.1rem;
+}
+
+#share-fallback-text {
+  width: 100%;
+  min-height: 120px;
+  font-family: inherit;
+  font-size: 0.55rem;
+  line-height: 1.4;
+  padding: 0.5rem;
+  border: 2px solid #706759;
+  border-radius: 8px;
+  background: #d7d0c2;
+  color: #3f392f;
 }
 
 .sr-only {
