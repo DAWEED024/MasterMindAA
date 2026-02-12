@@ -1378,19 +1378,35 @@ function finishGame(won) {
     el.copyResultCodeBtn.classList.add("hidden");
   }
 
-  if (!isDailyMode()) {
-    updateStats(state.mode, won, attempts, finalTimeMs);
-  } else if (state.mode === MODES.DAILY && state.isDailyOfficial) {
-    const dailyDate = state.currentDailyDateUTC || getUTCDateStamp();
-    saveDailyLock({
-      completed: true,
-      won,
-      attempts,
-      timeMs: finalTimeMs,
-      finishedAt: Date.now()
-    }, dailyDate);
+  if (!isDailyMode()) {if (!isDailyMode()) {
+  updateStats(state.mode, won, attempts, finalTimeMs);
 
+} else if (state.mode === MODES.DAILY && state.isDailyOfficial) {
+  const dailyDate = state.currentDailyDateUTC || getUTCDateStamp();
+
+  saveDailyLock({
+    completed: true,
+    won,
+    attempts,
+    timeMs: finalTimeMs,
+    finishedAt: Date.now()
+  }, dailyDate);
+
+  // 🔒 WYSYŁAMY DO RANKINGU TYLKO JEŚLI WYGRANA
+  if (won) {
     uploadDailyScore({
+      dateUTC: dailyDate,
+      nickname: state.nickname || localStorage.getItem(NICKNAME_KEY) || "Player",
+      deviceId: state.deviceId,
+      attempts,
+      timeMs: finalTimeMs
+    }).then(() => {
+      el.subtitle.textContent = "Saved!";
+    }).catch(() => {
+      el.subtitle.textContent = "Score upload failed (offline?)";
+    });
+  }
+}
       dateUTC: dailyDate,
       nickname: state.nickname || localStorage.getItem(NICKNAME_KEY) || "Player",
       deviceId: state.deviceId,
