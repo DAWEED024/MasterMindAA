@@ -148,6 +148,14 @@ h2 {
   display: none !important;
 }
 
+.flow-screen.hidden,
+.game-screen.hidden,
+.result-modal.hidden,
+.stats-body.hidden,
+#share-fallback.hidden {
+  display: none !important;
+}
+
 @keyframes screenIn {
   from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
@@ -284,7 +292,8 @@ button:disabled {
   gap: calc(var(--gap) * 0.7);
   margin-bottom: var(--gap);
   min-height: 0;
-  overflow: auto;
+  overflow-x: hidden;
+  overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
   touch-action: pan-y;
