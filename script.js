@@ -563,6 +563,7 @@ async function uploadDailyScore({ dateUTC, nickname, deviceId, attempts, timeMs 
     mode,
     nickname,
     deviceId,
+    won: true,
     timeMs: Math.floor(timeMs),
     attempts,
     createdAt: Date.now()
@@ -599,27 +600,52 @@ async function loadLeaderboardForToday() {
   el.leaderboardList.innerHTML = "";
   el.leaderboardPodium.innerHTML = "";
   el.leaderboardYourRank.textContent = "";
-  try {
-    const q = query(
-      collection(db, "leaderboards"),
-      where("dateUTC", "==", dateUTC),
-      where("mode", "==", "daily"),
-      orderBy("attempts", "asc"),
-      orderBy("timeMs", "asc"),
-      orderBy("createdAt", "asc"),
-      limit(20)
-    );
-    const snap = await getDocs(q);
-    const rows = snap.docs.map((d) => {
+
+  const queryWithWon = query(
+    collection(db, "leaderboards"),
+    where("dateUTC", "==", dateUTC),
+    where("mode", "==", "daily"),
+    where("won", "==", true),
+    orderBy("attempts", "asc"),
+    orderBy("timeMs", "asc"),
+    orderBy("createdAt", "asc"),
+    limit(20)
+  );
+
+  const baseQuery = query(
+    collection(db, "leaderboards"),
+    where("dateUTC", "==", dateUTC),
+    where("mode", "==", "daily"),
+    orderBy("attempts", "asc"),
+    orderBy("timeMs", "asc"),
+    orderBy("createdAt", "asc"),
+    limit(20)
+  );
+
+  const mapRows = (snap) => snap.docs
+    .map((d) => {
       const v = d.data();
       return {
         nickname: v.nickname || "Player",
         deviceId: v.deviceId || "",
         attempts: Math.min(6, Math.max(1, Number(v.attempts) || 6)),
         timeMs: Math.max(0, Number(v.timeMs) || 0),
-        createdAt: Math.max(0, Number(v.createdAt) || 0)
+        createdAt: Math.max(0, Number(v.createdAt) || 0),
+        won: v.won === true
       };
-    });
+    })
+    .filter((row) => row.won === true);
+
+  try {
+    let rows;
+    try {
+      const snap = await getDocs(queryWithWon);
+      rows = mapRows(snap);
+    } catch {
+      const snap = await getDocs(baseQuery);
+      rows = mapRows(snap);
+    }
+
     rows.sort((a, b) => (a.attempts - b.attempts) || (a.timeMs - b.timeMs) || (a.createdAt - b.createdAt));
     renderLeaderboardRows(rows);
     el.leaderboardUpdated.textContent = `Updated: ${formatUtcClock()} UTC`;
@@ -1390,17 +1416,19 @@ function finishGame(won) {
       finishedAt: Date.now()
     }, dailyDate);
 
-    uploadDailyScore({
-      dateUTC: dailyDate,
-      nickname: state.nickname || localStorage.getItem(NICKNAME_KEY) || "Player",
-      deviceId: state.deviceId,
-      attempts,
-      timeMs: finalTimeMs
-    }).then(() => {
-      el.subtitle.textContent = "Saved!";
-    }).catch(() => {
-      el.subtitle.textContent = "Score upload failed (offline?)";
-    });
+    if (won) {
+      uploadDailyScore({
+        dateUTC: dailyDate,
+        nickname: state.nickname || localStorage.getItem(NICKNAME_KEY) || "Player",
+        deviceId: state.deviceId,
+        attempts,
+        timeMs: finalTimeMs
+      }).then(() => {
+        el.subtitle.textContent = "Saved!";
+      }).catch(() => {
+        el.subtitle.textContent = "Score upload failed (offline?)";
+      });
+    }
   }
   renderStatsPanel();
   if (!isDailyMode()) {
