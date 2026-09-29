@@ -1,0 +1,92 @@
+name: FILTR public security guard
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "filtr/**"
+      - ".github/workflows/filtr-security.yml"
+  pull_request:
+    paths:
+      - "filtr/**"
+      - ".github/workflows/filtr-security.yml"
+
+jobs:
+  guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+
+      - name: Verify public FILTR artifact
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s filtr/index.html
+
+          if grep -nE 'sb_secret_[A-Za-z0-9_-]{16,}|SUPABASE_SERVICE_ROLE_KEY[[:space:]]*=|-----BEGIN ([A-Z ]+ )?PRIVATE KEY-----|postgres(ql)?://[^[:space:]/:]+:[^[:space:]@]+@|#k=[A-Za-z0-9_-]{24,}' filtr/index.html; then
+            echo "Potential secret detected in public FILTR artifact."
+            exit 1
+          fi
+
+          ! grep -q 'sourceMappingURL' filtr/index.html
+          ! grep -q 'function candidateWindowsForDay' filtr/index.html
+          ! grep -q 'function intersectIds' filtr/index.html
+          ! grep -q 'function sortPreliminary' filtr/index.html
+          ! grep -q 'function allMeetingCandidates' filtr/index.html
+
+          grep -q 'dayOverlaps' filtr/index.html
+          grep -q 'meetingPlans' filtr/index.html
+          grep -q 'function statusFor' filtr/index.html
+          grep -q 'function done' filtr/index.html
+          grep -q 'function current' filtr/index.html
+          grep -q 'function completed' filtr/index.html
+          grep -q 'function slotText' filtr/index.html
+          ! grep -q 'scoreHtml' filtr/index.html
+          ! grep -q 'class="score"' filtr/index.html
+          ! grep -q '^\.score{' filtr/index.html
+          grep -q 'function validateDraftSlots' filtr/index.html
+          grep -q 'customEditing:false' filtr/index.html
+          grep -q 'state.customEditing)return"custom"' filtr/index.html
+          grep -q 'E.saveDay.disabled=state.saving||!validation.ok' filtr/index.html
+          grep -q 'E.addSlotRow.classList.toggle("hidden",!custom)' filtr/index.html
+          grep -q 'if(saved)closeDay()' filtr/index.html
+          grep -q 'var MG=\["stycznia"' filtr/index.html
+          grep -q 'function shareDate' filtr/index.html
+          grep -q 'function shareWindow' filtr/index.html
+          grep -q 'function visibleMeetingSections' filtr/index.html
+          grep -q 'function visibleMeetingItems' filtr/index.html
+          grep -q 'visibleMeetingItems(plan).slice(0,3)' filtr/index.html
+          grep -q 'Wspólne okno: cały dzień' filtr/index.html
+          grep -q 'Poniżej minimum: ' filtr/index.html
+          grep -q 'Pełny skład · ' filtr/index.html
+          grep -q 'Dobry termin · ' filtr/index.html
+          grep -q 'Wstępny termin' filtr/index.html
+          grep -q 'Czekamy na: ' filtr/index.html
+          ! grep -q 'prefix=x.missing' filtr/index.html
+          grep -q 'name="robots" content="noindex,nofollow,noarchive,nosnippet,noimageindex"' filtr/index.html
+
+      - name: Verify strict inline-script CSP
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+          import base64, hashlib, re
+
+          html = Path("filtr/index.html").read_text()
+          script = re.search(r"<script>([\s\S]*?)</script>", html)
+          csp = re.search(r'<meta http-equiv="Content-Security-Policy" content="([^"]+)">', html)
+          if not script or not csp:
+              raise SystemExit("inline script or CSP meta missing")
+
+          digest = base64.b64encode(hashlib.sha256(script.group(1).encode()).digest()).decode()
+          expected = f"script-src 'sha256-{digest}'"
+          if expected not in csp.group(1):
+              raise SystemExit("CSP hash does not match public inline script")
+
+          script_policy = next(
+              (part.strip() for part in csp.group(1).split(";") if part.strip().startswith("script-src ")),
+              ""
+          )
+          if "'unsafe-inline'" in script_policy:
+              raise SystemExit("unsafe-inline must not be allowed for public scripts")
+          PY
